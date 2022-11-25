@@ -19,7 +19,7 @@
 #include <cpu/ifetch.h>
 #include <cpu/decode.h>
 
-#define GR(name) (*((word_t *)(name)))
+#define GR(name) gpr(name)
 #define Memory_Load vaddr_read
 #define Memory_Store vaddr_write
 
@@ -30,21 +30,22 @@ enum {
 	TYPE_N, // none
 };
 
-#define get_reg_ptr(name, base)					\
-	do {							\
-		int name##_idx = BITS(i, (base + 4), base);	\
-		*name = &gpr(name##_idx);			\
-	} while(0)
-#define RJ() get_reg_ptr(rj, 5)
-#define RK() get_reg_ptr(rk, 10)
-#define RD() get_reg_ptr(rd, 0)
+#define get_reg_idx(ptr, base)				\
+({							\
+	int __base = base;				\
+	int __idx = BITS(i, (__base + 4), __base);	\
+	*ptr = __idx;					\
+})
+#define RJ() get_reg_idx(rj, 5)
+#define RK() get_reg_idx(rk, 10)
+#define RD() get_reg_idx(rd, 0)
 #define SI20() do { *imm = SEXT(BITS(i, 24, 5), 20) << 12; } while(0)
 #define SI12() do { *imm = SEXT(BITS(i, 21, 10), 12); } while(0)
 
 #define _2R() { RJ(); RD(); }
 #define _1R() { RD(); }
 
-static void decode_operand(Decode *s, word_t *imm, int type, word_t **rj, word_t **rk, word_t **rd) {
+static void decode_operand(Decode *s, int type, int *rj, int *rk, int *rd, word_t *imm) {
 	uint32_t i = s->isa.inst.val;
 	switch (type) {
 		case TYPE_1RI20:
@@ -62,9 +63,9 @@ static void decode_operand(Decode *s, word_t *imm, int type, word_t **rj, word_t
 }
 
 static int decode_exec(Decode *s) {
-	word_t *rj = NULL;
-	word_t *rk = NULL;
-	word_t *rd = NULL;
+	int rj = 0;
+	int rk = 0;
+	int rd = 0;
 	word_t imm = 0;
 	s->dnpc = s->snpc;
 
@@ -73,7 +74,7 @@ static int decode_exec(Decode *s) {
 {										\
 	const char inst_name[] = #name;						\
 	printf("%s\n", inst_name);						\
-	decode_operand(s, &imm, concat(TYPE_, type), &rj, &rk, &rd);		\
+	decode_operand(s, concat(TYPE_, type), &rj, &rk, &rd, &imm);		\
 	__VA_ARGS__ ;								\
 }
 
@@ -91,7 +92,7 @@ static int decode_exec(Decode *s) {
 	INSTPAT("????????????????????????????????",	inv,		N,		INV(s->pc));
 	INSTPAT_END();
 
-	gpr(0) = 0; // reset $zero to 0
+	GR(0) = 0; // reset $zero to 0
 
 	return 0;
 }
