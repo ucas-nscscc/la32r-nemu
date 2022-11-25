@@ -3,6 +3,7 @@ menu "Memory Configuration"
 config MBASE
   hex "Memory base address"
   default 0x0        if ISA_x86
+  default 0x1c000000 if ISA_loongarch32r
   default 0x80000000
 
 config MSIZE
