@@ -19,41 +19,55 @@
 #include <cpu/ifetch.h>
 #include <cpu/decode.h>
 
-#define R(i) gpr(i)
-#define Mr vaddr_read
-#define Mw vaddr_write
+#define GR(name) (*((word_t *)(name)))
+#define Memory_Load vaddr_read
+#define Memory_Store vaddr_write
 
 enum {
 	TYPE_1RI20,
 	TYPE_2RI12,
+	TYPE_NTRAP,
 	TYPE_N, // none
 };
 
-#define src(num, reg) do { *src##num = R(reg); } while(0)
-#define si20() do { *imm = SEXT(BITS(i, 24, 5), 20) << 12; } while(0)
-#define si12() do { *imm = SEXT(BITS(i, 21, 10), 12); } while(0)
+#define get_reg_ptr(name, base)					\
+	do {							\
+		int name##_idx = BITS(i, (base + 4), base);	\
+		*name = &gpr(name##_idx);			\
+	} while(0)
+#define RJ() get_reg_ptr(rj, 5)
+#define RK() get_reg_ptr(rk, 10)
+#define RD() get_reg_ptr(rd, 0)
+#define SI20() do { *imm = SEXT(BITS(i, 24, 5), 20) << 12; } while(0)
+#define SI12() do { *imm = SEXT(BITS(i, 21, 10), 12); } while(0)
 
-static void decode_operand(Decode *s, int *dest, word_t *src1, word_t *src2, word_t *imm, int type) {
+#define _2R() { RJ(); RD(); }
+#define _1R() { RD(); }
+#define _NR() { *rj = &gpr(4); }
+
+static void decode_operand(Decode *s, word_t *imm, int type, word_t **rj, word_t **rk, word_t **rd) {
 	uint32_t i = s->isa.inst.val;
-	int rd  = BITS(i, 4, 0);
-	int rj = BITS(i, 9, 5);
-	// int rk = BITS(i, 14, 10);
-	*dest = rd;
 	switch (type) {
 		case TYPE_1RI20:
-			si20();
+			_1R();
+			SI20();
 			break;
 		case TYPE_2RI12:
-			src(1, rj);
-			src(2, rd);
-			si12();
+			_2R();
+			SI12();
 			break;
+		case TYPE_NTRAP:
+			_NR();
+			break;
+
 	}
 }
 
 static int decode_exec(Decode *s) {
-	int dest = 0;
-	word_t src1 = 0, src2 = 0, imm = 0;
+	word_t *rj = NULL;
+	word_t *rk = NULL;
+	word_t *rd = NULL;
+	word_t imm = 0;
 	s->dnpc = s->snpc;
 
 #define INSTPAT_INST(s) ((s)->isa.inst.val)
@@ -61,25 +75,25 @@ static int decode_exec(Decode *s) {
 {										\
 	const char inst_name[] = #name;						\
 	printf("%s\n", inst_name);						\
-	decode_operand(s, &dest, &src1, &src2, &imm, concat(TYPE_, type));	\
+	decode_operand(s, &imm, concat(TYPE_, type), &rj, &rk, &rd);		\
 	__VA_ARGS__ ;								\
 }
 
 	INSTPAT_START();
 	/*	Inst Pattern				Inst Name	Inst Type	Inst Op */
 	/* type 1RI20 */
-	INSTPAT("0001010 ???????????????????? ?????",	lu12i.w,	1RI20,		R(dest) = imm);
+	INSTPAT("0001010 ???????????????????? ?????",	lu12i.w,	1RI20,		GR(rd) = imm);
 	
 	/* type 2RI12 */
-	INSTPAT("0010100010 ???????????? ????? ?????",	ld.w,		2RI12,		R(dest) = Mr(src1 + imm, 4));
-	INSTPAT("0010100110 ???????????? ????? ?????",	st.w,		2RI12,		Mw(src1 + imm, 4, src2));
+	INSTPAT("0010100010 ???????????? ????? ?????",	ld.w,		2RI12,		GR(rd) = Memory_Load(GR(rj) + imm, 4));
+	INSTPAT("0010100110 ???????????? ????? ?????",	st.w,		2RI12,		Memory_Store(GR(rj) + imm, 4, GR(rd)));
 	
 	/* type None */
-	INSTPAT("11111 000000000000000000000000000",	ntrap,		N,		NEMUTRAP(s->pc, R(4))); // R(4) is $a0
+	INSTPAT("11111 000000000000000000000000000",	ntrap,		NTRAP,		NEMUTRAP(s->pc, GR(rj)));
 	INSTPAT("????????????????????????????????",	inv,		N,		INV(s->pc));
 	INSTPAT_END();
 
-	R(0) = 0; // reset $zero to 0
+	gpr(0) = 0; // reset $zero to 0
 
 	return 0;
 }
