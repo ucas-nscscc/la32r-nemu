@@ -29,9 +29,7 @@ enum {
 	TYPE_N, // none
 };
 
-#define srcRJ() do { *src1 = R(rj); } while (0)
-#define srcRK() do { *src2 = R(rk); } while (0)
-#define srcRD() do { *src2 = R(rd); } while (0)
+#define src(num, reg) do { *src##num = R(reg); } while(0)
 #define si20() do { *imm = SEXT(BITS(i, 24, 5), 20) << 12; } while(0)
 #define si12() do { *imm = SEXT(BITS(i, 21, 10), 12); } while(0)
 
@@ -42,8 +40,14 @@ static void decode_operand(Decode *s, int *dest, word_t *src1, word_t *src2, wor
 	// int rk = BITS(i, 14, 10);
 	*dest = rd;
 	switch (type) {
-		case TYPE_1RI20:		si20(); break;
-		case TYPE_2RI12:	srcRD(); srcRJ(); si12(); break;
+		case TYPE_1RI20:
+			si20();
+			break;
+		case TYPE_2RI12:
+			src(1, rj);
+			src(2, rd);
+			si12();
+			break;
 	}
 }
 
