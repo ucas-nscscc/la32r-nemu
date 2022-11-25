@@ -25,9 +25,11 @@
 
 enum {
 	TYPE_3R,
-	TYPE_1RSI20,
 	TYPE_2RSI12,
 	TYPE_2RUI12,
+	TYPE_2RI16,
+	TYPE_1RSI20,
+	TYPE_I26,
 	TYPE_NTRAP,
 	TYPE_N, // none
 };
@@ -44,6 +46,8 @@ enum {
 #define SI20() do { *imm = SEXT(BITS(i, 24, 5), 20) << 12; } while(0)
 #define SI12() do { *imm = SEXT(BITS(i, 21, 10), 12); } while(0)
 #define UI12() do { *imm = BITS(i, 21, 10); } while(0)
+#define I16() do { *imm = SEXT((BITS(i, 25, 10) << 2), 18); } while(0)
+#define I26() do { *imm = SEXT((((BITS(i, 9, 0) << 16) | BITS(i, 25, 10)) << 2), 28); } while(0)
 
 #define _3R() { RJ(); RK(); RD(); }
 #define _2R() { RJ(); RD(); }
@@ -52,10 +56,8 @@ enum {
 static void decode_operand(Decode *s, int type, int *rj, int *rk, int *rd, word_t *imm) {
 	uint32_t i = s->isa.inst.val;
 	switch (type) {
-		case TYPE_1RSI20:
-			_1R();
-			SI20();
-			break;
+		case TYPE_3R:
+			_3R();
 		case TYPE_2RSI12:
 			_2R();
 			SI12();
@@ -63,6 +65,17 @@ static void decode_operand(Decode *s, int type, int *rj, int *rk, int *rd, word_
 		case TYPE_2RUI12:
 			_2R();
 			UI12();
+			break;
+		case TYPE_2RI16:
+			_2R();
+			I16();
+			break;
+		case TYPE_1RSI20:
+			_1R();
+			SI20();
+			break;
+		case TYPE_I26:
+			I26();
 			break;
 		case TYPE_NTRAP:
 			_1R();
@@ -123,6 +136,13 @@ static int decode_exec(Decode *s) {
 	INSTPAT("0000001101 ???????????? ????? ?????",	andi.w,		2RSI12,		GR(rd) = GR(rj) & imm);
 	INSTPAT("0000001110 ???????????? ????? ?????",	ori.w,		2RSI12,		GR(rd) = GR(rj) | imm);
 	INSTPAT("0000001111 ???????????? ????? ?????",	xori.w,		2RSI12,		GR(rd) = GR(rj) ^ imm);
+
+	/* type 2RSI16 */
+	INSTPAT("010011 ???????????????? ????? ?????",	jirl,		2RI16,		GR(rd) = s->pc + 4; s->pc = GR(rj) + imm);
+
+	/* type I26 */
+	INSTPAT("010100 ???????????????? ??????????",	b,		I26,		s->pc = s->pc + imm);
+	INSTPAT("010101 ???????????????? ??????????",	bl,		I26,		GR(1) = s->pc + 4; s->pc = s->pc + imm);
 
 	/* type None */
 	INSTPAT("11111 00000000000000000 00000 ?????",	ntrap,		NTRAP,		NEMUTRAP(s->pc, GR(rd)));
