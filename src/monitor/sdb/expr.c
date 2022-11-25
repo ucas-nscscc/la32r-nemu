@@ -1,5 +1,6 @@
 /***************************************************************************************
 * Copyright (c) 2014-2022 Zihao Yu, Nanjing University
+* Copyright (c) 2022 MiaoHao, the University of Chinese Academy of Science
 *
 * NEMU is licensed under Mulan PSL v2.
 * You can use this software according to the terms and conditions of the Mulan PSL v2.
@@ -188,7 +189,6 @@ void dump_tokens(int begin, int end)
 // priority: deref '>' * '=' / '>' + '=' - '>' == '=' !=
 static word_t eval(int begin, int end, bool *success)
 {
-	dump_tokens(begin, end);
 	if (*success == false) {
 		return 0;
 	}
@@ -254,7 +254,6 @@ static word_t eval(int begin, int end, bool *success)
 			lval = eval(begin, op - 1, success);
 		} 
 		rval = eval(op + 1, end, success);
-		printf("lval: %d, op: %c, rval: %d\n", lval, type, rval);
 
 		switch (type) {
 			case '+': return lval + rval;

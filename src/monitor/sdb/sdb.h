@@ -1,5 +1,6 @@
 /***************************************************************************************
 * Copyright (c) 2014-2022 Zihao Yu, Nanjing University
+* Copyright (c) 2022 MiaoHao, the University of Chinese Academy of Science
 *
 * NEMU is licensed under Mulan PSL v2.
 * You can use this software according to the terms and conditions of the Mulan PSL v2.
@@ -21,6 +22,7 @@
 word_t expr(char *e, bool *success);
 int del_wp(int wp_no);
 int add_wp(char* e);
+bool check_wp(word_t pc);
 void display_wp();
 
 #endif
