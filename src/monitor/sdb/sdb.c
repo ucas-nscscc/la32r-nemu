@@ -16,6 +16,7 @@
 
 #include <isa.h>
 #include <cpu/cpu.h>
+#include <memory/vaddr.h>
 #include <readline/readline.h>
 #include <readline/history.h>
 #include "sdb.h"
@@ -54,6 +55,122 @@ static int cmd_q(char *args) {
 	return -1;
 }
 
+static int cmd_si(char *args)
+{
+	char *arg = strtok(NULL, " ");
+	int step = 0;
+	if (arg == NULL)
+		step = 1;
+	else {
+		sscanf(arg, "%d", &step);
+		if (step < 0) {
+			printf("Please input a positive integer.\n");
+			return 0;
+		}
+	}
+	cpu_exec(step);
+	return 0;
+}
+
+static int cmd_info(char *args)
+{
+	char *arg = strtok(args, " ");
+	if (arg == NULL) {
+		printf("Please input [r] for registers or [w] for watchpoints.\n");
+		return 0;
+	}
+
+	switch (*arg)
+	{
+	case 'r':
+		// isa_reg_display() is in ./src/isa/$ISA/reg.c
+		isa_reg_display();
+		break;
+	case 'w':
+		display_wp();
+		break;
+	default:
+		printf("Please input [r] for registers or [w] for watchpoints.\n");
+		break;
+	}
+	return 0;
+}
+
+static int cmd_x(char *args)
+{
+	char *arg[2];
+	arg[0] = strtok(NULL, " ");
+	arg[1] = strtok(NULL, " ");
+	if (arg[0] == NULL) {
+		printf("Please input [N] for the number of words.\n");
+		return 0;
+	} else if (arg[1] == NULL) {
+		printf("Please input [EXPR] for the beginning address.\n");
+		return 0;
+	}
+
+	word_t n, vaddr;
+	bool success;
+
+	n = atoi(arg[0]);
+	// sscanf(arg[1], "%x", &vaddr);
+	vaddr = expr(arg[1], &success);
+
+	while (n > 0) {
+		printf(FMT_WORD": ", vaddr);
+		for (int i = 4; i > 0 && n > 0; i--, n--, vaddr += 4) {
+		  printf("%08x ", vaddr_read(vaddr, 4));
+		}
+		putchar('\n');
+	}
+	return 0;
+}
+
+static int cmd_p(char *args)
+{
+	bool success;
+	if (args == NULL) {
+		printf("Please input [EXPR] to evaluate its value.\n");
+		return 0;
+	}
+	int val = expr(args, &success);
+	if (success == false)
+		printf("Illegal expression, please retry.\n");
+	else
+		printf("%u\n", val);
+	return 0;
+}
+
+static int cmd_w(char *args)
+{
+	int ret = add_wp(args);
+	switch (ret)
+	{
+	case 2:
+		printf("There is no available watchpoint in the pool.\n");
+		break;
+	case 3:
+		printf("Illegal expression, please retry.\n");
+		break;
+	case 0:
+		printf("Successfully set a watchpoint with expression %s.\n", args);
+		break;
+	default:
+		break;
+	}
+	return 0;
+}
+
+static int cmd_d(char *args)
+{
+	int num = atoi(args);
+	if (del_wp(num) == 1)
+		printf("No such watchpoint set.\n");
+	else
+		printf("Successfully delete watchpoint with number %d.\n", num);
+	return 0;
+}
+
 static int cmd_help(char *args);
 
 static struct {
@@ -63,6 +180,12 @@ static struct {
 } cmd_table [] = {
 	{ "help", "Display information about all supported commands", cmd_help },
 	{ "c", "Continue the execution of the program", cmd_c },
+	{ "si", "Run [N] instructions", cmd_si },
+	{ "info", "Print the information of [r]egiters or [w]atchpoints", cmd_info },
+	{ "x", "Scan the memory for [N] words begins with the value of [EXPR]", cmd_x },
+	{ "p", "Print the value of [EXPR]", cmd_p},
+	{ "w", "Set a watchpoint with [EXPR]", cmd_w},
+	{ "d", "Delete a watchpoint with number [N]", cmd_d},
 	{ "q", "Exit NEMU", cmd_q },
 
 	/* TODO: Add more commands */
