@@ -95,13 +95,14 @@ static int decode_exec(Decode *s) {
 	int rk = 0;
 	int rd = 0;
 	word_t imm = 0;
+	char instr[32];
 	s->dnpc = s->snpc;
 
 #define INSTPAT_INST(s) ((s)->isa.inst.val)
 #define INSTPAT_MATCH(s, name, type, ... /* execute body */ )			\
 {										\
 	const char inst_name[] = #name;						\
-	printf("0x%x: %08x %s\n", s->pc, s->isa.inst.val, inst_name);						\
+	strcpy(instr, inst_name);						\
 	decode_operand(s, concat(TYPE_, type), &rj, &rk, &rd, &imm);		\
 	__VA_ARGS__ ;								\
 }
@@ -173,6 +174,11 @@ static int decode_exec(Decode *s) {
 	INSTPAT("11111 00000000000000000 00000 ?????",	ntrap,		NTRAP,		NEMUTRAP(s->pc, GR(rd)));
 	INSTPAT("????????????????????????????????",	inv,		N,		INV(s->pc));
 	INSTPAT_END();
+
+#if defined(CONFIG_ITRACE_COND) && defined(CONFIG_ISA_loongarch32r)
+	if (ITRACE_COND)
+		log_write("0x%x:\t%08x\t%s\trj: %d\trk: %d\trd: %d\timm: 0x%x\n", s->pc, s->isa.inst.val, instr, rj, rk, rd, imm);
+#endif
 
 	GR(0) = 0; // reset $zero to 0
 
