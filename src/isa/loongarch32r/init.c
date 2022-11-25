@@ -23,7 +23,7 @@ static const uint32_t img [] = {
 	0x1438000c,  // lu12i.w $r12,114688(0x1c000)
 	0x29800180,  // st.w $r0,$r12,0
 	0x28800184,  // ld.w $r4,$r12,0
-	0xf8000000,  // ebreak (used as nemu_trap)
+	0xf8000004,  // ebreak (used as nemu_trap)
 };
 
 static void restart() {

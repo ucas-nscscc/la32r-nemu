@@ -43,7 +43,6 @@ enum {
 
 #define _2R() { RJ(); RD(); }
 #define _1R() { RD(); }
-#define _NR() { *rj = &gpr(4); }
 
 static void decode_operand(Decode *s, word_t *imm, int type, word_t **rj, word_t **rk, word_t **rd) {
 	uint32_t i = s->isa.inst.val;
@@ -57,9 +56,8 @@ static void decode_operand(Decode *s, word_t *imm, int type, word_t **rj, word_t
 			SI12();
 			break;
 		case TYPE_NTRAP:
-			_NR();
+			_1R();
 			break;
-
 	}
 }
 
@@ -89,7 +87,7 @@ static int decode_exec(Decode *s) {
 	INSTPAT("0010100110 ???????????? ????? ?????",	st.w,		2RI12,		Memory_Store(GR(rj) + imm, 4, GR(rd)));
 	
 	/* type None */
-	INSTPAT("11111 000000000000000000000000000",	ntrap,		NTRAP,		NEMUTRAP(s->pc, GR(rj)));
+	INSTPAT("11111 00000000000000000 00000 ?????",	ntrap,		NTRAP,		NEMUTRAP(s->pc, GR(rd)));
 	INSTPAT("????????????????????????????????",	inv,		N,		INV(s->pc));
 	INSTPAT_END();
 
