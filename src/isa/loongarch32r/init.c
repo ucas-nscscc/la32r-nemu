@@ -1,5 +1,6 @@
 /***************************************************************************************
 * Copyright (c) 2014-2022 Zihao Yu, Nanjing University
+* Copyright (c) 2022 MiaoHao, the University of Chinese Academy of Science
 *
 * NEMU is licensed under Mulan PSL v2.
 * You can use this software according to the terms and conditions of the Mulan PSL v2.
@@ -19,25 +20,24 @@
 // this is not consistent with uint8_t
 // but it is ok since we do not access the array directly
 static const uint32_t img [] = {
-  0x1c00000c,  // pcaddu12i $t0,0
-  0x29804180,  // st.w $zero,$t0,16
-  0x28804184,  // ld.w $a0,$t0,16
-  0x002a0000,  // break 0 (used as nemu_trap)
-  0xdeadbeef,  // some data
+	0x1438000c,  // lu12i.w $r12,114688(0x1c000)
+	0x29800180,  // st.w $r0,$r12,0
+	0x28800184,  // ld.w $r4,$r12,0
+	0xf8000000,  // ebreak (used as nemu_trap)
 };
 
 static void restart() {
-  /* Set the initial program counter. */
-  cpu.pc = RESET_VECTOR;
+	/* Set the initial program counter. */
+	cpu.pc = RESET_VECTOR;
 
-  /* The zero register is always 0. */
-  cpu.gpr[0] = 0;
+	/* The zero register is always 0. */
+	cpu.gpr[0] = 0;
 }
 
 void init_isa() {
-  /* Load built-in image. */
-  memcpy(guest_to_host(RESET_VECTOR), img, sizeof(img));
+	/* Load built-in image. */
+	memcpy(guest_to_host(RESET_VECTOR), img, sizeof(img));
 
-  /* Initialize this virtual computer system. */
-  restart();
+	/* Initialize this virtual computer system. */
+	restart();
 }
