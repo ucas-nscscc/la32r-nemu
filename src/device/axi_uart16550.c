@@ -60,6 +60,7 @@ typedef enum {
 #define fetch_bit(reg, bit) BITS(regs[NR_##reg], bit, bit)
 
 static uint32_t regs[12] = {
+	[NR_LCR] = 0x0,
 	[NR_LSR] = COM_LSR_TXRDY,
 };
 
@@ -116,7 +117,9 @@ static void uart_io_handler(uint32_t offset, int len, bool is_write) {
 		regs[NR_LSR] = regs[NR_LSR] & ~(COM_LSR_DATA);
 		break;
 	case NR_THR:
+		regs[NR_LSR] = regs[NR_LSR] & ~(COM_LSR_TXRDY);
 		serial_putc(regs[reg_idx]);
+		regs[NR_LSR] = regs[NR_LSR] | COM_LSR_TXRDY;
 		break;
 	case NR_LSR:
 		break;
