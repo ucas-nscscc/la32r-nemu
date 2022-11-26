@@ -22,6 +22,12 @@
 #include "sdb.h"
 #include "utils.h"
 
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+#include <sys/select.h>
+#include <termios.h>
+
 static int is_batch_mode = false;
 
 void init_regex();
@@ -217,12 +223,30 @@ static int cmd_help(char *args) {
 	return 0;
 }
 
+struct termios orig_termios;
+
+static void reset_terminal_mode()
+{
+	tcsetattr(STDIN_FILENO, TCSANOW, &orig_termios);
+}
+
+static void enable_raw_mode() {
+	struct termios raw;
+
+        tcgetattr(STDIN_FILENO, &raw);
+        orig_termios = raw;
+        raw.c_lflag &= ~(ECHO | ICANON);
+        tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw);
+}
+
 void sdb_set_batch_mode() {
 	is_batch_mode = true;
 }
 
 void sdb_mainloop() {
 	if (is_batch_mode) {
+		enable_raw_mode();
+		atexit(reset_terminal_mode);
 		cmd_c(NULL);
 		return;
 	}

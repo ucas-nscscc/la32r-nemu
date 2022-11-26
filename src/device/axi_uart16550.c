@@ -59,9 +59,18 @@ typedef enum {
 
 #define fetch_bit(reg, bit) BITS(regs[NR_##reg], bit, bit)
 
-static uint32_t regs[12];
+static uint32_t regs[12] = {
+	[NR_LSR] = COM_LSR_TXRDY,
+};
 
 static uint32_t *uart_base;
+
+void send_uart(int c)
+{
+	regs[NR_RBR] = (char)c;
+	regs[NR_LSR] = regs[NR_LSR] | COM_LSR_DATA;
+	// TODO: raise interrupt
+}
 
 static void serial_putc(char ch) {
 	MUXDEF(CONFIG_TARGET_AM, putch(ch), putc(ch, stderr));
@@ -103,8 +112,13 @@ static void uart_io_handler(uint32_t offset, int len, bool is_write) {
 	}
 	switch (reg_idx)
 	{
+	case NR_RBR:
+		regs[NR_LSR] = regs[NR_LSR] & ~(COM_LSR_DATA);
+		break;
 	case NR_THR:
 		serial_putc(regs[reg_idx]);
+		break;
+	case NR_LSR:
 		break;
 	default:
 		panic("uart do not support offset = %d", offset);
