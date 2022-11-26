@@ -175,7 +175,7 @@ static int decode_exec(Decode *s) {
 	INSTPAT("????????????????????????????????",	inv,		N,		INV(s->pc));
 	INSTPAT_END();
 
-#if defined(CONFIG_ITRACE_COND) && defined(CONFIG_ISA_loongarch32r)
+#ifdef CONFIG_ITRACE_COND
 	if (ITRACE_COND)
 		log_write("0x%x:\t%08x\t%s\trj: %d\trk: %d\trd: %d\timm: 0x%x\n", s->pc, s->isa.inst.val, instr, rj, rk, rd, imm);
 #endif
