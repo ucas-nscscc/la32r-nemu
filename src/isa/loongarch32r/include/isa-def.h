@@ -56,6 +56,7 @@ typedef struct {
 	word_t gpr[32];
 	vaddr_t pc;
 	word_t csr[0x182];
+	word_t intr;
 } loongarch32r_CPU_state;
 
 // decode

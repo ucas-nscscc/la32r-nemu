@@ -181,6 +181,8 @@ static int decode_exec(Decode *s) {
 	/* type 1CSR2R */
 	INSTPAT("00000100 ?????????????? ????? ?????",	csrxchg,	1CSR2R,		word_t tmp = GR(rd); GR(rd) = CSR(csr); CSR(csr) = (tmp & GR(rj)) | (CSR(csr) & ~GR(rj)));
 	
+	INSTPAT("0000011001001000001110 00000 00000",	ertn,		N,		csr(CSR_CRMD) = (csr(CSR_PRMD) & 0x7) | (csr(CSR_CRMD) & ~(0x7)); s->dnpc = CSR(CSR_ERA));
+
 	/* type None */
 	INSTPAT("11111 00000000000000000 00000 ?????",	ntrap,		1RSI20,		NEMUTRAP(s->pc, GR(rd)));
 	INSTPAT("????????????????????????????????",	inv,		N,		INV(s->pc));
@@ -190,13 +192,14 @@ static int decode_exec(Decode *s) {
 	if (ITRACE_COND) {
 		char tmp[128];
 		sprintf(tmp, "0x%x:\t%08x\t%s\trj: %d\trk: %d\trd: %d\timm: 0x%x", s->pc, s->isa.inst.val, instr, rj, rk, rd, imm);
-		// log_write("%s\n", tmp);
+		log_write("%s\n", tmp);
 		strcpy(iring[iring_ptr], tmp);
 		iring_ptr = (iring_ptr + 1) % IRING_SIZE;
 	}
 #endif
 
 	GR(0) = 0; // reset $zero to 0
+	CSR(CSR_ESTAT) |= (cpu.intr & 0x1fff);
 
 	return 0;
 }
