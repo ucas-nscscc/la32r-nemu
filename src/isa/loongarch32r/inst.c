@@ -24,14 +24,13 @@
 #define Memory_Store vaddr_write
 
 enum {
-	TYPE_3R,
+	TYPE_3RI0,
 	TYPE_2RUI5,
 	TYPE_2RSI12,
 	TYPE_2RUI12,
 	TYPE_2RI16,
 	TYPE_1RSI20,
-	TYPE_I26,
-	TYPE_NTRAP,
+	TYPE_0RI26,
 	TYPE_N, // none
 };
 
@@ -44,6 +43,12 @@ enum {
 #define RJ() get_reg_idx(rj, 5)
 #define RK() get_reg_idx(rk, 10)
 #define RD() get_reg_idx(rd, 0)
+#define _3R() { RJ(); RK(); RD(); }
+#define _2R() { RJ(); RD(); }
+#define _1R() { RD(); }
+#define _0R()
+
+#define I0()
 #define SI20() do { *imm = SEXT(BITS(i, 24, 5), 20) << 12; } while(0)
 #define SI12() do { *imm = SEXT(BITS(i, 21, 10), 12); } while(0)
 #define UI12() do { *imm = BITS(i, 21, 10); } while(0)
@@ -51,42 +56,22 @@ enum {
 #define I16() do { *imm = SEXT((BITS(i, 25, 10) << 2), 18); } while(0)
 #define I26() do { *imm = SEXT((((BITS(i, 9, 0) << 16) | BITS(i, 25, 10)) << 2), 28); } while(0)
 
-#define _3R() { RJ(); RK(); RD(); }
-#define _2R() { RJ(); RD(); }
-#define _1R() { RD(); }
+#define prepare_ops(reg_type, imm_type)	\
+	case TYPE_##reg_type##imm_type:	\
+		_##reg_type();		\
+		imm_type();		\
+		break;
 
 static void decode_operand(Decode *s, int type, int *rj, int *rk, int *rd, word_t *imm) {
 	uint32_t i = s->isa.inst.val;
 	switch (type) {
-		case TYPE_3R:
-			_3R();
-			break;
-		case TYPE_2RUI5:
-			_2R();
-			UI5();
-			break;
-		case TYPE_2RSI12:
-			_2R();
-			SI12();
-			break;
-		case TYPE_2RUI12:
-			_2R();
-			UI12();
-			break;
-		case TYPE_2RI16:
-			_2R();
-			I16();
-			break;
-		case TYPE_1RSI20:
-			_1R();
-			SI20();
-			break;
-		case TYPE_I26:
-			I26();
-			break;
-		case TYPE_NTRAP:
-			_1R();
-			break;
+		prepare_ops(3R,I0);
+		prepare_ops(2R,UI5);
+		prepare_ops(2R,SI12);
+		prepare_ops(2R,UI12);
+		prepare_ops(2R,I16);
+		prepare_ops(1R,SI20);
+		prepare_ops(0R,I26);
 	}
 }
 
@@ -110,24 +95,24 @@ static int decode_exec(Decode *s) {
 	INSTPAT_START();
 	/*	Inst Pattern				Inst Name	Inst Type	Inst Op */
 	/* type 3R */
-	INSTPAT("00000000000100000 ????? ????? ?????",	add.w,		3R,		uint64_t tmp = ((int64_t)(int32_t)GR(rj)) + ((int64_t)(int32_t)GR(rk)); GR(rd) = tmp & 0xffffffff);
-	INSTPAT("00000000000100010 ????? ????? ?????",	sub.w,		3R,		uint64_t tmp = ((int64_t)(int32_t)GR(rj)) - ((int64_t)(int32_t)GR(rk)); GR(rd) = tmp & 0xffffffff);
-	INSTPAT("00000000000100100 ????? ????? ?????",	slt.w,		3R,		GR(rd) = (signed)GR(rj) < (signed)GR(rk) ? 1 : 0);
-	INSTPAT("00000000000100101 ????? ????? ?????",	sltu.w,		3R,		GR(rd) = (unsigned)GR(rj) < (unsigned)GR(rk) ? 1 : 0);
-	INSTPAT("00000000000101000 ????? ????? ?????",	nor.w,		3R,		GR(rd) = ~(GR(rj) | GR(rk)));
-	INSTPAT("00000000000101001 ????? ????? ?????",	and.w,		3R,		GR(rd) = GR(rj) & GR(rk));
-	INSTPAT("00000000000101010 ????? ????? ?????",	or.w,		3R,		GR(rd) = GR(rj) | GR(rk));
-	INSTPAT("00000000000101011 ????? ????? ?????",	xor.w,		3R,		GR(rd) = GR(rj) ^ GR(rk));
-	INSTPAT("00000000000101110 ????? ????? ?????",	sll.w,		3R,		GR(rd) = GR(rj) << (GR(rk) & 0x1f));
-	INSTPAT("00000000000101111 ????? ????? ?????",	srl.w,		3R,		GR(rd) = ((unsigned)GR(rj)) >> (GR(rk) & 0x1f));
-	INSTPAT("00000000000110000 ????? ????? ?????",	sra.w,		3R,		GR(rd) = ((signed)GR(rj)) >> (GR(rk) & 0x1f));
-	INSTPAT("00000000000111000 ????? ????? ?????",	mul.w,		3R,		int64_t product = ((int64_t)(int32_t)GR(rj)) * ((int64_t)(int32_t)GR(rk)); GR(rd) = product & 0xffffffff);
-	INSTPAT("00000000000111001 ????? ????? ?????",	mulh.w,		3R,		int64_t product = ((int64_t)(int32_t)GR(rj)) * ((int64_t)(int32_t)GR(rk)); GR(rd) = ((product & 0xffffffff00000000) >> 32) & 0xffffffff);
-	INSTPAT("00000000000111010 ????? ????? ?????",	mulh.wu,	3R,		uint64_t product = ((unsigned)GR(rj)) * ((unsigned)GR(rk)); GR(rd) = ((product & 0xffffffff00000000) >> 32) & 0xffffffff);
-	INSTPAT("00000000001000000 ????? ????? ?????",	div.w,		3R,		int64_t quotient = ((int64_t)(int32_t)GR(rj)) / ((int64_t)(int32_t)GR(rk)); GR(rd) = quotient & 0xffffffff);
-	INSTPAT("00000000001000001 ????? ????? ?????",	mod.w,		3R,		int64_t remainder = ((int64_t)(int32_t)GR(rj)) % ((int64_t)(int32_t)GR(rk)); GR(rd) = remainder & 0xffffffff);
-	INSTPAT("00000000001000010 ????? ????? ?????",	div.wu,		3R,		uint64_t quotient = ((unsigned)GR(rj)) / ((unsigned)GR(rk)); GR(rd) = quotient & 0xffffffff);
-	INSTPAT("00000000001000011 ????? ????? ?????",	mod.wu,		3R,		uint64_t remainder = ((unsigned)GR(rj)) % ((unsigned)GR(rk)); GR(rd) = remainder & 0xffffffff);
+	INSTPAT("00000000000100000 ????? ????? ?????",	add.w,		3RI0,		uint64_t tmp = ((int64_t)(int32_t)GR(rj)) + ((int64_t)(int32_t)GR(rk)); GR(rd) = tmp & 0xffffffff);
+	INSTPAT("00000000000100010 ????? ????? ?????",	sub.w,		3RI0,		uint64_t tmp = ((int64_t)(int32_t)GR(rj)) - ((int64_t)(int32_t)GR(rk)); GR(rd) = tmp & 0xffffffff);
+	INSTPAT("00000000000100100 ????? ????? ?????",	slt.w,		3RI0,		GR(rd) = (signed)GR(rj) < (signed)GR(rk) ? 1 : 0);
+	INSTPAT("00000000000100101 ????? ????? ?????",	sltu.w,		3RI0,		GR(rd) = (unsigned)GR(rj) < (unsigned)GR(rk) ? 1 : 0);
+	INSTPAT("00000000000101000 ????? ????? ?????",	nor.w,		3RI0,		GR(rd) = ~(GR(rj) | GR(rk)));
+	INSTPAT("00000000000101001 ????? ????? ?????",	and.w,		3RI0,		GR(rd) = GR(rj) & GR(rk));
+	INSTPAT("00000000000101010 ????? ????? ?????",	or.w,		3RI0,		GR(rd) = GR(rj) | GR(rk));
+	INSTPAT("00000000000101011 ????? ????? ?????",	xor.w,		3RI0,		GR(rd) = GR(rj) ^ GR(rk));
+	INSTPAT("00000000000101110 ????? ????? ?????",	sll.w,		3RI0,		GR(rd) = GR(rj) << (GR(rk) & 0x1f));
+	INSTPAT("00000000000101111 ????? ????? ?????",	srl.w,		3RI0,		GR(rd) = ((unsigned)GR(rj)) >> (GR(rk) & 0x1f));
+	INSTPAT("00000000000110000 ????? ????? ?????",	sra.w,		3RI0,		GR(rd) = ((signed)GR(rj)) >> (GR(rk) & 0x1f));
+	INSTPAT("00000000000111000 ????? ????? ?????",	mul.w,		3RI0,		int64_t product = ((int64_t)(int32_t)GR(rj)) * ((int64_t)(int32_t)GR(rk)); GR(rd) = product & 0xffffffff);
+	INSTPAT("00000000000111001 ????? ????? ?????",	mulh.w,		3RI0,		int64_t product = ((int64_t)(int32_t)GR(rj)) * ((int64_t)(int32_t)GR(rk)); GR(rd) = ((product & 0xffffffff00000000) >> 32) & 0xffffffff);
+	INSTPAT("00000000000111010 ????? ????? ?????",	mulh.wu,	3RI0,		uint64_t product = ((unsigned)GR(rj)) * ((unsigned)GR(rk)); GR(rd) = ((product & 0xffffffff00000000) >> 32) & 0xffffffff);
+	INSTPAT("00000000001000000 ????? ????? ?????",	div.w,		3RI0,		int64_t quotient = ((int64_t)(int32_t)GR(rj)) / ((int64_t)(int32_t)GR(rk)); GR(rd) = quotient & 0xffffffff);
+	INSTPAT("00000000001000001 ????? ????? ?????",	mod.w,		3RI0,		int64_t remainder = ((int64_t)(int32_t)GR(rj)) % ((int64_t)(int32_t)GR(rk)); GR(rd) = remainder & 0xffffffff);
+	INSTPAT("00000000001000010 ????? ????? ?????",	div.wu,		3RI0,		uint64_t quotient = ((unsigned)GR(rj)) / ((unsigned)GR(rk)); GR(rd) = quotient & 0xffffffff);
+	INSTPAT("00000000001000011 ????? ????? ?????",	mod.wu,		3RI0,		uint64_t remainder = ((unsigned)GR(rj)) % ((unsigned)GR(rk)); GR(rd) = remainder & 0xffffffff);
 	
 	/* type 1RSI20 */
 	INSTPAT("0001010 ???????????????????? ?????",	lu12i.w,	1RSI20,		GR(rd) = imm);
@@ -167,17 +152,22 @@ static int decode_exec(Decode *s) {
 
 
 	/* type I26 */
-	INSTPAT("010100 ???????????????? ??????????",	b,		I26,		s->dnpc = s->pc + imm);
-	INSTPAT("010101 ???????????????? ??????????",	bl,		I26,		GR(1) = s->pc + 4; s->dnpc = s->pc + imm);
+	INSTPAT("010100 ???????????????? ??????????",	b,		0RI26,		s->dnpc = s->pc + imm);
+	INSTPAT("010101 ???????????????? ??????????",	bl,		0RI26,		GR(1) = s->pc + 4; s->dnpc = s->pc + imm);
 
 	/* type None */
-	INSTPAT("11111 00000000000000000 00000 ?????",	ntrap,		NTRAP,		NEMUTRAP(s->pc, GR(rd)));
+	INSTPAT("11111 00000000000000000 00000 ?????",	ntrap,		1RSI20,		NEMUTRAP(s->pc, GR(rd)));
 	INSTPAT("????????????????????????????????",	inv,		N,		INV(s->pc));
 	INSTPAT_END();
 
 #ifdef CONFIG_ITRACE_COND
-	if (ITRACE_COND)
-		log_write("0x%x:\t%08x\t%s\trj: %d\trk: %d\trd: %d\timm: 0x%x\n", s->pc, s->isa.inst.val, instr, rj, rk, rd, imm);
+	if (ITRACE_COND) {
+		char tmp[128];
+		sprintf(tmp, "0x%x:\t%08x\t%s\trj: %d\trk: %d\trd: %d\timm: 0x%x", s->pc, s->isa.inst.val, instr, rj, rk, rd, imm);
+		// log_write("%s\n", tmp);
+		strcpy(iring[iring_ptr], tmp);
+		iring_ptr = (iring_ptr + 1) % IRING_SIZE;
+	}
 #endif
 
 	GR(0) = 0; // reset $zero to 0

@@ -26,6 +26,9 @@
  */
 #define MAX_INST_TO_PRINT 10
 
+char iring[IRING_SIZE][128];
+int iring_ptr = 0;
+
 CPU_state cpu = {};
 uint64_t g_nr_guest_inst = 0;
 static uint64_t g_timer = 0; // unit: us
@@ -93,6 +96,13 @@ static void statistic() {
 	Log("total guest instructions = " NUMBERIC_FMT, g_nr_guest_inst);
 	if (g_timer > 0) Log("simulation frequency = " NUMBERIC_FMT " inst/s", g_nr_guest_inst * 1000000 / g_timer);
 	else Log("Finish running in less than 1 us and can not calculate the simulation frequency");
+
+#ifdef CONFIG_ITRACE_COND
+	if (ITRACE_COND) {
+		for (int i = 0; i < IRING_SIZE; i++)
+			log_write("%s\n", iring[i]);
+	}
+#endif
 }
 
 void assert_fail_msg() {
