@@ -31,6 +31,21 @@ config SERIAL_INPUT_FIFO
   default n
 endif # HAS_SERIAL
 
+menuconfig HAS_UART
+  bool "Enable uart 16550"
+  default n
+
+if HAS_UART
+config UART_PORT
+  depends on HAS_PORT_IO
+  hex "Port address of the serial controller"
+  default 0x3f8
+
+config UART_MMIO
+  hex "MMIO address of the serial controller"
+  default 0x1fe00000
+endif # HAS_UART
+
 menuconfig HAS_TIMER
   bool "Enable timer"
   default y

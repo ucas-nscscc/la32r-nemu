@@ -20,33 +20,103 @@
 /* https://docs.xilinx.com/v/u/en-US/pg143-axi-uart16550 */
 // NOTE: this is compatible to AXI UART 16550
 
-#define CH_OFFSET 0
+#define COM_RX		(char *)0x1000	// In:  Receive buffer (DLAB=0)
+#define COM_TX		(char *)0x1000	// Out: Transmit buffer (DLAB=0)
+#define COM_DLL		(char *)0x1000	// Out: Divisor Latch Low (DLAB=1)
+#define COM_DLM		(char *)0x1004	// Out: Divisor Latch High (DLAB=1)
+#define COM_IER		(char *)0x1004	// Out: Interrupt Enable Register
+#define COM_IER_RDI	0x01	// Enable receiver data interrupt
+#define COM_IIR		(char *)0x1008	// In:  Interrupt ID Register
+#define COM_FCR		(char *)0x1008	// Out: FIFO Control Register
+#define COM_FCR_RST	0x06	// FCR: disable FIFO and reset
+#define COM_LCR		(char *)0x100C	// Out: Line Control Register
+#define COM_LCR_DLAB	0x80	// Divisor latch access bit
+#define COM_LCR_WLEN8	0x03	// Wordlength: 8 bits
+#define COM_MCR		(char *)0x1010	// Out: Modem Control Register
+#define COM_MCR_RTS	0x02	// RTS complement
+#define COM_MCR_DTR	0x01	// DTR complement
+#define COM_MCR_OUT2	0x08	// Out2 complement
+#define COM_LSR		(char *)0x1014	// In:  Line Status Register
+#define COM_LSR_DATA	0x01	// Data available
+#define COM_LSR_TXRDY	0x20	// Transmit buffer avail
+#define COM_LSR_TSRE	0x40	// Transmitter off
 
-static uint8_t *serial_base = NULL;
+typedef enum {
+	NR_RBR,
+	NR_THR,
+	NR_IER,
+	NR_IIR,
+	NR_FCR,
+	NR_LCR,
+	NR_MCR,
+	NR_LSR,
+	NR_MSR,
+	NR_SCR,
+	NR_DLL,
+	NR_DLM,
+	NR_REGS,
+} uart_regs_t;
 
+#define fetch_bit(reg, bit) BITS(regs[NR_##reg], bit, bit)
+
+static uint32_t regs[12];
+
+static uint32_t *uart_base;
 
 static void serial_putc(char ch) {
 	MUXDEF(CONFIG_TARGET_AM, putch(ch), putc(ch, stderr));
 }
 
-static void serial_io_handler(uint32_t offset, int len, bool is_write) {
-	assert(len == 1);
-	switch (offset) {
-		/* We bind the serial port with the host stderr in NEMU. */
-		case CH_OFFSET:
-			if (is_write) serial_putc(serial_base[0]);
-			else panic("do not support read");
-			break;
-		default: panic("do not support offset = %d", offset);
+static uart_regs_t get_reg_idx(uint32_t offset, bool is_write)
+{
+	switch (offset)
+	{
+	case 0x1000:
+		return fetch_bit(LCR, 7) == 0 ? (is_write ? NR_THR : NR_RBR) : NR_DLL;
+	case 0x1004:
+		return fetch_bit(LCR, 7) == 0 ? NR_IER : NR_DLM;
+	case 0x1008:
+		return (fetch_bit(LCR, 7) == 1 && !is_write) ? NR_FCR : is_write ? NR_FCR : NR_IIR;
+	case 0x100c:
+		return NR_LCR;
+	case 0x1010:
+		return NR_MSR;
+	case 0x1014:
+		return NR_LSR;
+	case 0x1018:
+		return NR_MSR;
+	case 0x101c:
+		return NR_SCR;
+	default:
+		return NR_REGS;
 	}
 }
 
-void init_serial() {
-	serial_base = new_space(8);
+static void uart_io_handler(uint32_t offset, int len, bool is_write) {
+	assert(len == 4);
+	uart_regs_t reg_idx = get_reg_idx(offset, is_write);
+	assert (reg_idx < NR_REGS);
+	if (is_write) {
+		regs[reg_idx] = uart_base[offset / 4];
+	} else {
+		uart_base[offset / 4] = regs[reg_idx];
+	}
+	switch (reg_idx)
+	{
+	case NR_THR:
+		serial_putc(regs[reg_idx]);
+		break;
+	default:
+		panic("uart do not support offset = %d", offset);
+	}
+}
+
+void init_uart() {
+	uart_base = (uint32_t *)new_space(64 * 1024);
 #ifdef CONFIG_HAS_PORT_IO
-	add_pio_map ("serial", CONFIG_SERIAL_PORT, serial_base, 8, serial_io_handler);
+	add_pio_map ("uart", CONFIG_UART_PORT, uart_base, 32, uart_io_handler);
 #else
-	add_mmio_map("serial", CONFIG_SERIAL_MMIO, serial_base, 8, serial_io_handler);
+	add_mmio_map("uart", CONFIG_UART_MMIO, uart_base, 64 * 1024, uart_io_handler);
 #endif
 
 }
