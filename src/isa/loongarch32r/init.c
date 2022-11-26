@@ -30,6 +30,16 @@ static void restart() {
 	/* Set the initial program counter. */
 	cpu.pc = RESET_VECTOR;
 
+	/* Set CRMD.DA to 1 */
+	cpu.csr[CSR_CRMD] = 0x8;
+	cpu.csr[CSR_EUEN] = 0x0;
+	cpu.csr[CSR_ECFG] = 0x0;
+	cpu.csr[CSR_ESTAT] = 0x0;
+	cpu.csr[CSR_TCFG] = 0x0;
+	cpu.csr[CSR_LLBCTL] = 0x0;
+	cpu.csr[CSR_DMW0] = 0x0;
+	cpu.csr[CSR_DMW1] = 0x0;
+
 	/* The zero register is always 0. */
 	cpu.gpr[0] = 0;
 }

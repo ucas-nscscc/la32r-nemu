@@ -20,6 +20,7 @@
 #include <cpu/decode.h>
 
 #define GR(name) gpr(name)
+#define CSR(name) csr(name)
 #define Memory_Load vaddr_read
 #define Memory_Store vaddr_write
 
@@ -31,22 +32,32 @@ enum {
 	TYPE_2RI16,
 	TYPE_1RSI20,
 	TYPE_0RI26,
+	TYPE_1CSR1R,
+	TYPE_1CSR2R,
 	TYPE_N, // none
 };
 
-#define get_reg_idx(ptr, base)				\
+#define get_gpr_idx(ptr, base)				\
 ({							\
 	int __base = base;				\
 	int __idx = BITS(i, (__base + 4), __base);	\
 	*ptr = __idx;					\
 })
-#define RJ() get_reg_idx(rj, 5)
-#define RK() get_reg_idx(rk, 10)
-#define RD() get_reg_idx(rd, 0)
+#define get_csr_idx(ptr, base)				\
+({							\
+	int __base = base;				\
+	int __idx = BITS(i, (__base + 14), __base);	\
+	*ptr = __idx;					\
+})
+#define RJ() get_gpr_idx(rj, 5)
+#define RK() get_gpr_idx(rk, 10)
+#define RD() get_gpr_idx(rd, 0)
+#define RC() get_csr_idx(csr, 10)
 #define _3R() { RJ(); RK(); RD(); }
 #define _2R() { RJ(); RD(); }
 #define _1R() { RD(); }
 #define _0R()
+#define _1CSR() { RC(); }
 
 #define I0()
 #define SI20() do { *imm = SEXT(BITS(i, 24, 5), 20) << 12; } while(0)
@@ -56,13 +67,18 @@ enum {
 #define I16() do { *imm = SEXT((BITS(i, 25, 10) << 2), 18); } while(0)
 #define I26() do { *imm = SEXT((((BITS(i, 9, 0) << 16) | BITS(i, 25, 10)) << 2), 28); } while(0)
 
-#define prepare_ops(reg_type, imm_type)	\
-	case TYPE_##reg_type##imm_type:	\
-		_##reg_type();		\
+#define prepare_ops(gpr_type, imm_type)	\
+	case TYPE_##gpr_type##imm_type:	\
+		_##gpr_type();		\
 		imm_type();		\
 		break;
+#define csr_prepare_ops(csr_type, gpr_type)	\
+	case TYPE_##csr_type##gpr_type:		\
+		_##gpr_type();			\
+		_##csr_type();			\
+		break;
 
-static void decode_operand(Decode *s, int type, int *rj, int *rk, int *rd, word_t *imm) {
+static void decode_operand(Decode *s, int type, int *rj, int *rk, int *rd, int *csr, word_t *imm) {
 	uint32_t i = s->isa.inst.val;
 	switch (type) {
 		prepare_ops(3R,I0);
@@ -72,6 +88,8 @@ static void decode_operand(Decode *s, int type, int *rj, int *rk, int *rd, word_
 		prepare_ops(2R,I16);
 		prepare_ops(1R,SI20);
 		prepare_ops(0R,I26);
+		csr_prepare_ops(1CSR,1R);
+		csr_prepare_ops(1CSR,2R);
 	}
 }
 
@@ -79,6 +97,7 @@ static int decode_exec(Decode *s) {
 	int rj = 0;
 	int rk = 0;
 	int rd = 0;
+	int csr = 0;
 	word_t imm = 0;
 	char instr[32];
 	s->dnpc = s->snpc;
@@ -88,7 +107,7 @@ static int decode_exec(Decode *s) {
 {										\
 	const char inst_name[] = #name;						\
 	strcpy(instr, inst_name);						\
-	decode_operand(s, concat(TYPE_, type), &rj, &rk, &rd, &imm);		\
+	decode_operand(s, concat(TYPE_, type), &rj, &rk, &rd, &csr, &imm);	\
 	__VA_ARGS__ ;								\
 }
 
@@ -155,6 +174,13 @@ static int decode_exec(Decode *s) {
 	INSTPAT("010100 ???????????????? ??????????",	b,		0RI26,		s->dnpc = s->pc + imm);
 	INSTPAT("010101 ???????????????? ??????????",	bl,		0RI26,		GR(1) = s->pc + 4; s->dnpc = s->pc + imm);
 
+	/* type 1CSR1R */
+	INSTPAT("00000100 ?????????????? 00000 ?????",	csrrd,		1CSR1R,		GR(rd) = CSR(csr));
+	INSTPAT("00000100 ?????????????? 00001 ?????",	csrwr,		1CSR1R,		word_t tmp = GR(rd); GR(rd) = CSR(csr); CSR(csr) = tmp);
+	
+	/* type 1CSR2R */
+	INSTPAT("00000100 ?????????????? ????? ?????",	csrxchg,	1CSR2R,		word_t tmp = GR(rd); GR(rd) = CSR(csr); CSR(csr) = (tmp & GR(rj)) | (CSR(csr) & ~GR(rj)));
+	
 	/* type None */
 	INSTPAT("11111 00000000000000000 00000 ?????",	ntrap,		1RSI20,		NEMUTRAP(s->pc, GR(rd)));
 	INSTPAT("????????????????????????????????",	inv,		N,		INV(s->pc));

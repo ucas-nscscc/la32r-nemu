@@ -60,6 +60,7 @@ typedef enum {
 #define fetch_bit(reg, bit) BITS(regs[NR_##reg], bit, bit)
 
 static uint32_t regs[12] = {
+	[NR_IER] = 0x0,
 	[NR_LCR] = 0x0,
 	[NR_LSR] = COM_LSR_TXRDY,
 };
@@ -71,6 +72,9 @@ void send_uart(int c)
 	regs[NR_RBR] = (char)c;
 	regs[NR_LSR] = regs[NR_LSR] | COM_LSR_DATA;
 	// TODO: raise interrupt
+	if (regs[NR_IER] & COM_IER_RDI) {
+		;
+	}
 }
 
 static void serial_putc(char ch) {
@@ -121,10 +125,16 @@ static void uart_io_handler(uint32_t offset, int len, bool is_write) {
 		serial_putc(regs[reg_idx]);
 		regs[NR_LSR] = regs[NR_LSR] | COM_LSR_TXRDY;
 		break;
+	case NR_IER:
+	case NR_FCR:
+	case NR_LCR:
 	case NR_LSR:
+	case NR_DLL:
+	case NR_DLM:
 		break;
 	default:
 		panic("uart do not support offset = %d", offset);
+		break;
 	}
 }
 
