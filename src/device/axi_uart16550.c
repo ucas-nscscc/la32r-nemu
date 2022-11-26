@@ -74,7 +74,7 @@ void send_uart(int c)
 	regs[NR_LSR] = regs[NR_LSR] | COM_LSR_DATA;
 	extern void dev_raise_intr(word_t);
 	if (regs[NR_IER] & COM_IER_RDI) {
-		dev_raise_intr(INTR_UART);
+		dev_raise_intr(CONFIG_UART_INTR);
 	}
 }
 
@@ -121,7 +121,7 @@ static void uart_io_handler(uint32_t offset, int len, bool is_write) {
 	case NR_RBR:
 		regs[NR_LSR] = regs[NR_LSR] & ~(COM_LSR_DATA);
 		extern void dev_clear_intr(word_t);
-		dev_clear_intr(INTR_UART);
+		dev_clear_intr(CONFIG_UART_INTR);
 		break;
 	case NR_THR:
 		regs[NR_LSR] = regs[NR_LSR] & ~(COM_LSR_TXRDY);

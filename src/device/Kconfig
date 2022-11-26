@@ -44,6 +44,10 @@ config UART_PORT
 config UART_MMIO
   hex "MMIO address of the serial controller"
   default 0x1fe00000
+
+config UART_INTR
+  hex "UART interrupt line connection number"
+  default 0x2
 endif # HAS_UART
 
 menuconfig HAS_TIMER
