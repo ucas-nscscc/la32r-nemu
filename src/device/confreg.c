@@ -28,7 +28,7 @@ do {								\
 	SDL_SetRenderDrawColor(renderer, r, g, 0, 255);		\
 	rect.h = 20;						\
 	rect.w = 20;						\
-	rect.x = 20 * rg_num;					\
+	rect.x = 30 * rg_num;					\
 	rect.y = 0;						\
 	SDL_RenderFillRect(renderer, &rect);			\
 	SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);	\
@@ -36,6 +36,7 @@ do {								\
 } while(0)
 
 typedef enum {
+	NR_LED,
 	NR_RG0,
 	NR_RG1,
 	NR_TIMER,
@@ -43,6 +44,7 @@ typedef enum {
 } confreg_regs_t;
 
 static uint32_t regs[NR_REGS] = {
+	[NR_LED] = 0xffff,
 	[NR_RG0] = 0x0,
 	[NR_RG1] = 0x0,
 	[NR_TIMER] = 0x0,
@@ -65,6 +67,22 @@ static void init_gpio() {
 	old_us = get_time();
 }
 
+static void update_led()
+{
+	int r = 0, i;
+	uint32_t led_reg = regs[NR_LED];
+	SDL_Rect rect = { 0, 30, 20, 20 };
+	for (i = 0; i < 16; i++) {
+		r = led_reg & 0x8000 ? 0 : 255;
+		SDL_SetRenderDrawColor(renderer, r, 0, 0, 255);
+		SDL_RenderFillRect(renderer, &rect);
+		SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
+		SDL_RenderDrawRect(renderer, &rect);
+		led_reg <<= 1;
+		rect.x += 30;
+	}
+}
+
 static void update_timer()
 {
 	uint32_t new_us = get_time();
@@ -77,6 +95,7 @@ void update_gpio()
 {
 	update_rg(0);
 	update_rg(1);
+	update_led();
 
 	SDL_RenderPresent(renderer);
 
@@ -87,6 +106,8 @@ static confreg_regs_t get_reg_idx(uint32_t offset, bool is_write)
 {
 	switch (offset)
 	{
+	case 0xf020:
+		return NR_LED;
 	case 0xf030:
 		return NR_RG0;
 	case 0xf040:
@@ -110,7 +131,7 @@ static void confreg_io_handler(uint32_t offset, int len, bool is_write)
 	}
 	switch (reg_idx)
 	{
-	case NR_RG0: case NR_RG1: case NR_TIMER:
+	case NR_LED: case NR_RG0: case NR_RG1: case NR_TIMER:
 		break;
 	default:
 		// panic("uart do not support offset = %d", offset);
