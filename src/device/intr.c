@@ -21,6 +21,5 @@ void dev_raise_intr(word_t NO) {
 }
 
 void dev_clear_intr(word_t NO) {
-	printf("clear intr");
 	cpu.intr &= ~(0x1 << NO);
 }

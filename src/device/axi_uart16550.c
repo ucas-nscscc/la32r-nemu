@@ -78,7 +78,8 @@ void send_uart(int c)
 	}
 }
 
-static void serial_putc(char ch) {
+static void uart_putc(char ch)
+{
 	MUXDEF(CONFIG_TARGET_AM, putch(ch), putc(ch, stderr));
 }
 
@@ -107,7 +108,8 @@ static uart_regs_t get_reg_idx(uint32_t offset, bool is_write)
 	}
 }
 
-static void uart_io_handler(uint32_t offset, int len, bool is_write) {
+static void uart_io_handler(uint32_t offset, int len, bool is_write)
+{
 	assert(len == 4);
 	uart_regs_t reg_idx = get_reg_idx(offset, is_write);
 	assert (reg_idx < NR_REGS);
@@ -125,7 +127,7 @@ static void uart_io_handler(uint32_t offset, int len, bool is_write) {
 		break;
 	case NR_THR:
 		regs[NR_LSR] = regs[NR_LSR] & ~(COM_LSR_TXRDY);
-		serial_putc(regs[reg_idx]);
+		uart_putc(regs[reg_idx]);
 		regs[NR_LSR] = regs[NR_LSR] | COM_LSR_TXRDY;
 		break;
 	case NR_IER:
@@ -141,7 +143,8 @@ static void uart_io_handler(uint32_t offset, int len, bool is_write) {
 	}
 }
 
-void init_uart() {
+void init_uart()
+{
 	uart_base = (uint32_t *)new_space(64 * 1024);
 #ifdef CONFIG_HAS_PORT_IO
 	add_pio_map ("uart", CONFIG_UART_PORT, uart_base, 32, uart_io_handler);

@@ -50,6 +50,21 @@ config UART_INTR
   default 0x2
 endif # HAS_UART
 
+menuconfig HAS_CONFREG
+  bool "Enable gpio controller"
+  default n
+
+if HAS_CONFREG
+config CONFREG_PORT
+  depends on HAS_PORT_IO
+  hex "Port address of the gpio controller"
+  default 0x3f8
+
+config CONFREG_MMIO
+  hex "MMIO address of the gpio controller"
+  default 0xbfaf0000
+endif # HAS_CONFREG
+
 menuconfig HAS_TIMER
   bool "Enable timer"
   default y
