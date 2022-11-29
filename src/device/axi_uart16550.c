@@ -18,6 +18,9 @@
 #include <utils.h>
 #include <device/map.h>
 
+#include <sys/select.h>
+#include <unistd.h>
+
 /* https://docs.xilinx.com/v/u/en-US/pg143-axi-uart16550 */
 // NOTE: this is compatible to AXI UART 16550
 
@@ -68,6 +71,27 @@ static uint32_t regs[12] = {
 
 static uint32_t *uart_base;
 
+/* refer to https://stackoverflow.com/questions/448944/c-non-blocking-keyboard-input */
+static int kbhit()
+{
+	struct timeval tv = { 0L, 0L };
+	fd_set fds;
+	FD_ZERO(&fds);
+	FD_SET(STDIN_FILENO, &fds);
+	return select(STDIN_FILENO + 1, &fds, NULL, NULL, &tv) > 0;
+}
+
+static int getch()
+{
+	int r;
+	unsigned char c;
+	if ((r = read(STDIN_FILENO, &c, sizeof(c))) < 0) {
+		return r;
+	} else {
+		return c;
+	}
+}
+
 void send_uart(int c)
 {
 	regs[NR_RBR] = (char)c;
@@ -81,6 +105,18 @@ void send_uart(int c)
 static void uart_putc(char ch)
 {
 	MUXDEF(CONFIG_TARGET_AM, putch(ch), putc(ch, stderr));
+}
+
+void update_uart()
+{
+	if (kbhit()) {
+		int c = getch();
+		send_uart(c);
+	}
+	if (!(regs[NR_LSR] & COM_LSR_TXRDY)) {
+		uart_putc(regs[NR_THR] & 0xff);
+		regs[NR_LSR] = regs[NR_LSR] | COM_LSR_TXRDY;
+	}
 }
 
 static uart_regs_t get_reg_idx(uint32_t offset, bool is_write)
@@ -127,8 +163,6 @@ static void uart_io_handler(uint32_t offset, int len, bool is_write)
 		break;
 	case NR_THR:
 		regs[NR_LSR] = regs[NR_LSR] & ~(COM_LSR_TXRDY);
-		uart_putc(regs[reg_idx]);
-		regs[NR_LSR] = regs[NR_LSR] | COM_LSR_TXRDY;
 		break;
 	case NR_IER:
 	case NR_FCR:

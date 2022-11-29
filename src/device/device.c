@@ -21,9 +21,6 @@
 #include <SDL2/SDL.h>
 #endif
 
-#include <unistd.h>
-#include <sys/select.h>
-
 void init_map();
 void init_serial();
 void init_uart();
@@ -37,29 +34,8 @@ void init_sdcard();
 void init_alarm();
 
 void send_key(uint8_t, bool);
-void send_uart(int);
+void update_uart();
 void vga_update_screen();
-
-/* refer to https://stackoverflow.com/questions/448944/c-non-blocking-keyboard-input */
-static int kbhit()
-{
-	struct timeval tv = { 0L, 0L };
-	fd_set fds;
-	FD_ZERO(&fds);
-	FD_SET(STDIN_FILENO, &fds);
-	return select(STDIN_FILENO + 1, &fds, NULL, NULL, &tv) > 0;
-}
-
-static int getch()
-{
-	int r;
-	unsigned char c;
-	if ((r = read(STDIN_FILENO, &c, sizeof(c))) < 0) {
-		return r;
-	} else {
-		return c;
-	}
-}
 
 void device_update() {
 	static uint64_t last = 0;
@@ -93,10 +69,7 @@ void device_update() {
 	}
 #endif
 #ifdef CONFIG_HAS_UART
-	if (kbhit()) {
-		int c = getch();
-		send_uart(c);
-	}
+	update_uart();
 #endif
 }
 
