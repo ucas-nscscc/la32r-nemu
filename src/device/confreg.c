@@ -15,9 +15,8 @@
 
 #include <common.h>
 #include <device/map.h>
+
 #include <SDL2/SDL.h>
-#include <SDL2/SDL_image.h>
-#include <SDL2/SDL_timer.h>
 
 #define TIMER_FREQ CONFIG_CONFREG_TIMER_FREQ MHz
 #define update_rg(rg_num)					\
