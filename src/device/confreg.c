@@ -19,129 +19,69 @@
 #include <SDL2/SDL_image.h>
 #include <SDL2/SDL_timer.h>
 
+#define TIMER_FREQ CONFIG_CONFREG_TIMER_FREQ MHz
+#define update_rg(rg_num)					\
+do {								\
+	int r = 0, g = 0;					\
+	SDL_Rect rect;						\
+	g = regs[NR_RG##rg_num] & 0x1 ? 255 : 0;		\
+	r = (regs[NR_RG##rg_num] & 0x2) >> 1 ? 255 : 0;		\
+	SDL_SetRenderDrawColor(renderer, r, g, 0, 255);		\
+	rect.h = 20;						\
+	rect.w = 20;						\
+	rect.x = 20 * rg_num;					\
+	rect.y = 0;						\
+	SDL_RenderFillRect(renderer, &rect);			\
+	SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);	\
+	SDL_RenderDrawRect(renderer, &rect);			\
+} while(0)
+
 typedef enum {
 	NR_RG0,
 	NR_RG1,
+	NR_TIMER,
 	NR_REGS,
 } confreg_regs_t;
 
 static uint32_t regs[NR_REGS] = {
 	[NR_RG0] = 0x0,
 	[NR_RG1] = 0x0,
+	[NR_TIMER] = 0x0,
 };
 
 static uint32_t *confreg_base;
+static uint32_t old_us;
+static uint32_t nr_us = TIMER_FREQ / (1 MHz);
 static SDL_Renderer *renderer = NULL;
-void DrawCircle(SDL_Renderer * renderer, int32_t centreX, int32_t centreY, int32_t radius)
-{
-   const int32_t diameter = (radius * 2);
-
-   int32_t x = (radius - 1);
-   int32_t y = 0;
-   int32_t tx = 1;
-   int32_t ty = 1;
-   int32_t error = (tx - diameter);
-
-   while (x >= y)
-   {
-      //  Each of the following renders an octant of the circle
-      SDL_RenderDrawPoint(renderer, centreX + x, centreY - y);
-      SDL_RenderDrawPoint(renderer, centreX + x, centreY + y);
-      SDL_RenderDrawPoint(renderer, centreX - x, centreY - y);
-      SDL_RenderDrawPoint(renderer, centreX - x, centreY + y);
-      SDL_RenderDrawPoint(renderer, centreX + y, centreY - x);
-      SDL_RenderDrawPoint(renderer, centreX + y, centreY + x);
-      SDL_RenderDrawPoint(renderer, centreX - y, centreY - x);
-      SDL_RenderDrawPoint(renderer, centreX - y, centreY + x);
-
-      if (error <= 0)
-      {
-	 ++y;
-	 error += ty;
-	 ty += 2;
-      }
-
-      if (error > 0)
-      {
-	 --x;
-	 tx += 2;
-	 error += (tx - diameter);
-      }
-   }
-}
 
 static void init_gpio() {
 	SDL_Window *window = NULL;
 	char title[128];
-	sprintf(title, "%s-NEMU gpio simulation", str(__GUEST_ISA__));
-	SDL_Init(SDL_INIT_EVERYTHING);              // Initialize SDL2
 
-	// Create an application window with the following settings:
-	window = SDL_CreateWindow(
-		title,                  // window title
-		SDL_WINDOWPOS_UNDEFINED,           // initial x position
-		SDL_WINDOWPOS_UNDEFINED,           // initial y position
-		640,                               // width, in pixels
-		480,                               // height, in pixels
-		SDL_WINDOW_SHOWN // flags - see below
-	);
-	renderer = SDL_CreateRenderer(window, -1, 0);
+	sprintf(title, "%s-NEMU gpio simulation", str(__GUEST_ISA__));
+	SDL_Init(SDL_INIT_EVERYTHING);
+	SDL_CreateWindowAndRenderer(640, 480, 0, &window, &renderer);
+	SDL_SetWindowTitle(window, title);
+
+	old_us = get_time();
+}
+
+static void update_timer()
+{
+	uint32_t new_us = get_time();
+	uint32_t us_interval = new_us - old_us;
+	old_us = new_us;
+	regs[NR_TIMER] += us_interval * nr_us;
 }
 
 void update_gpio()
 {
-	// printf("update_gpio");
-	// SDL_RenderClear(renderer);
-
-	int r = 0, g = 0, b = 0;
-	if ((regs[NR_RG0] & 0x3) == 0) {
-		SDL_Rect rect = {
-		.h = 20,
-		.w = 20,
-		.x = 0,
-		.y = 0
-		};
-		SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
-		SDL_RenderDrawRect(renderer, &rect);
-	} else {
-		r = regs[NR_RG0] & 0x1 ? 255 : 0;
-		g = (regs[NR_RG0] & 0x2) >> 1 ? 255 : 0;
-		SDL_SetRenderDrawColor(renderer, r, g, b, 255);
-		SDL_Rect rect = {
-			.h = 20,
-			.w = 20,
-			.x = 0,
-			.y = 0
-		};
-		SDL_RenderFillRect(renderer, &rect);
-	}
-	
-	r = 0;
-	g = 0;
-	b = 0;
-	if ((regs[NR_RG1] & 0x3) == 0) {
-		SDL_Rect rect = {
-		.h = 20,
-		.w = 20,
-		.x = 20,
-		.y = 0
-		};
-		SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
-		SDL_RenderDrawRect(renderer, &rect);
-	} else {
-		r = regs[NR_RG1] & 0x1 ? 255 : 0;
-		g = (regs[NR_RG1] & 0x2) >> 1 ? 255 : 0;
-		SDL_SetRenderDrawColor(renderer, r, g, b, 255);
-		SDL_Rect rect = {
-			.h = 20,
-			.w = 20,
-			.x = 20,
-			.y = 0
-		};
-		SDL_RenderFillRect(renderer, &rect);
-	}
+	update_rg(0);
+	update_rg(1);
 
 	SDL_RenderPresent(renderer);
+
+	update_timer();
 }
 
 static confreg_regs_t get_reg_idx(uint32_t offset, bool is_write)
@@ -152,6 +92,8 @@ static confreg_regs_t get_reg_idx(uint32_t offset, bool is_write)
 		return NR_RG0;
 	case 0xf040:
 		return NR_RG1;
+	case 0xe000:
+		return NR_TIMER;
 	default:
 		return NR_REGS;
 	}
@@ -169,7 +111,7 @@ static void confreg_io_handler(uint32_t offset, int len, bool is_write)
 	}
 	switch (reg_idx)
 	{
-	case NR_RG0: case NR_RG1:
+	case NR_RG0: case NR_RG1: case NR_TIMER:
 		break;
 	default:
 		// panic("uart do not support offset = %d", offset);

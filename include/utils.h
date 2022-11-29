@@ -32,6 +32,10 @@ extern NEMUState nemu_state;
 
 // ----------- timer -----------
 
+#define Hz * (1)
+#define KHz * (1000 Hz)
+#define MHz * (1000 KHz)
+
 uint64_t get_time();
 
 // ----------- log -----------
