@@ -29,6 +29,6 @@ SRCS-BLACKLIST-$(CONFIG_TARGET_AM) += src/device/alarm.c
 
 ifdef CONFIG_DEVICE
 ifndef CONFIG_TARGET_AM
-LIBS += -lSDL2
+LIBS += -lSDL2 -lSDL2_image
 endif
 endif

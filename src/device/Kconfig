@@ -63,6 +63,10 @@ config CONFREG_PORT
 config CONFREG_MMIO
   hex "MMIO address of the gpio controller"
   default 0xbfaf0000
+
+config CONFREG_TIMER_FREQ
+  int "Frequency of timer in confreg (MHz)"
+  default 100
 endif # HAS_CONFREG
 
 menuconfig HAS_TIMER

@@ -63,7 +63,7 @@ typedef enum {
 
 #define fetch_bit(reg, bit) BITS(regs[NR_##reg], bit, bit)
 
-static uint32_t regs[12] = {
+static uint32_t regs[NR_REGS] = {
 	[NR_IER] = 0x0,
 	[NR_LCR] = 0x0,
 	[NR_LSR] = COM_LSR_TXRDY,

@@ -35,6 +35,7 @@ void init_alarm();
 
 void send_key(uint8_t, bool);
 void update_uart();
+void update_gpio();
 void vga_update_screen();
 
 void device_update() {
@@ -68,9 +69,8 @@ void device_update() {
 		}
 	}
 #endif
-#ifdef CONFIG_HAS_UART
-	update_uart();
-#endif
+	IFDEF(CONFIG_HAS_UART, update_uart());
+	IFDEF(CONFIG_HAS_CONFREG, update_gpio());
 }
 
 void sdl_clear_event_queue() {
