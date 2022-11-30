@@ -19,6 +19,12 @@
 #include <cpu/difftest.h>
 #include <locale.h>
 
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+#include <sys/select.h>
+#include <termios.h>
+
 /* The assembly code of instructions executed is only output to the screen
  * when the number of instructions executed is less than this value.
  * This is useful when you use the `si' command.
@@ -114,6 +120,22 @@ void assert_fail_msg() {
 	statistic();
 }
 
+struct termios orig_termios;
+
+static void enable_raw_mode() {
+	struct termios raw;
+
+        tcgetattr(STDIN_FILENO, &raw);
+        orig_termios = raw;
+        raw.c_lflag &= ~(ECHO | ICANON);
+        tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw);
+}
+
+static void reset_terminal_mode()
+{
+	tcsetattr(STDIN_FILENO, TCSANOW, &orig_termios);
+}
+
 /* Simulate how the CPU works. */
 void cpu_exec(uint64_t n) {
 	g_print_step = (n < MAX_INST_TO_PRINT);
@@ -126,7 +148,9 @@ void cpu_exec(uint64_t n) {
 
 	uint64_t timer_start = get_time();
 
+	enable_raw_mode();
 	execute(n);
+	reset_terminal_mode();
 
 	uint64_t timer_end = get_time();
 	g_timer += timer_end - timer_start;
