@@ -34,11 +34,72 @@ do {								\
 	SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);	\
 	SDL_RenderDrawRect(renderer, &rect);			\
 } while(0)
+#define hex_to_num(hex)			\
+({					\
+	uint8_t ret;			\
+	uint8_t __hex = (hex) & 0xf;	\
+	switch(__hex)			\
+	{				\
+	case 0x0:			\
+		ret = 0x3f;		\
+		break;			\
+	case 0x1:			\
+		ret = 0x06;		\
+		break;			\
+	case 0x2:			\
+		ret = 0x5b;		\
+		break;			\
+	case 0x3:			\
+		ret = 0x4f;		\
+		break;			\
+	case 0x4:			\
+		ret = 0x66;		\
+		break;			\
+	case 0x5:			\
+		ret = 0x6d;		\
+		break;			\
+	case 0x6:			\
+		ret = 0x7d;		\
+		break;			\
+	case 0x7:			\
+		ret = 0x07;		\
+		break;			\
+	case 0x8:			\
+		ret = 0x7f;		\
+		break;			\
+	case 0x9:			\
+		ret = 0x6f;		\
+		break;			\
+	case 0xa:			\
+		ret = 0x77;		\
+		break;			\
+	case 0xb:			\
+		ret = 0x7c;		\
+		break;			\
+	case 0xc:			\
+		ret = 0x39;		\
+		break;			\
+	case 0xd:			\
+		ret = 0x5e;		\
+		break;			\
+	case 0xe:			\
+		ret = 0x79;		\
+		break;			\
+	case 0xf:			\
+		ret = 0x71;		\
+		break;			\
+	default:			\
+		ret = 0x3f;		\
+		break;			\
+	}				\
+	ret;				\
+})
 
 typedef enum {
 	NR_LED,
 	NR_RG0,
 	NR_RG1,
+	NR_NUM,
 	NR_TIMER,
 	NR_REGS,
 } confreg_regs_t;
@@ -47,6 +108,7 @@ static uint32_t regs[NR_REGS] = {
 	[NR_LED] = 0xffff,
 	[NR_RG0] = 0x0,
 	[NR_RG1] = 0x0,
+	[NR_NUM] = 0x0,
 	[NR_TIMER] = 0x0,
 };
 
@@ -83,6 +145,51 @@ static void update_led()
 	}
 }
 
+static void mov_vertical(SDL_Rect *rects, int dx, int num)
+{
+	int i;
+	for (i = 0; i < num; i++) {
+		rects[i].x += dx;
+	}
+}
+
+static void draw_num(uint8_t num, int nr)
+{
+	SDL_Rect rects[7] = {
+		{ 5, 60, 20, 5 },
+		{ 25, 65, 5, 20 },
+		{ 25, 90, 5, 20 },
+		{ 5, 110, 20, 5 },
+		{ 0, 90, 5, 20 },
+		{ 0, 65, 5, 20 },
+		{ 5, 85, 20, 5 },
+	};
+	int i, r = 0;
+
+	mov_vertical(rects, 40 * nr, 7);
+	for (i = 0; i < 7; i++) {
+		r = num & 0x1 ? 255: 0;
+		SDL_SetRenderDrawColor(renderer, r, 0, 0, 255);
+		SDL_RenderFillRect(renderer, &rects[i]);
+		// SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
+		// SDL_RenderDrawRect(renderer, &rects[i]);
+		num >>= 1;
+	}
+}
+
+static void update_num()
+{
+	int i;
+	uint32_t num_reg = regs[NR_NUM];
+	for (i = 0; i < 8; i++) {
+		uint8_t hex = (num_reg & 0xf0000000) >> 28;
+		// printf("hex: 0x%x reg num: 0x%08x\n", hex, regs[NR_NUM]);
+		uint8_t num = hex_to_num(hex);
+		draw_num(num, i);
+		num_reg <<= 4;
+	}
+}
+
 static void update_timer()
 {
 	uint32_t new_us = get_time();
@@ -93,9 +200,10 @@ static void update_timer()
 
 void update_gpio()
 {
+	update_led();
 	update_rg(0);
 	update_rg(1);
-	update_led();
+	update_num();
 
 	SDL_RenderPresent(renderer);
 
@@ -112,6 +220,8 @@ static confreg_regs_t get_reg_idx(uint32_t offset, bool is_write)
 		return NR_RG0;
 	case 0xf040:
 		return NR_RG1;
+	case 0xf050:
+		return NR_NUM;
 	case 0xe000:
 		return NR_TIMER;
 	default:
@@ -131,7 +241,7 @@ static void confreg_io_handler(uint32_t offset, int len, bool is_write)
 	}
 	switch (reg_idx)
 	{
-	case NR_LED: case NR_RG0: case NR_RG1: case NR_TIMER:
+	case NR_LED: case NR_RG0: case NR_RG1: case NR_NUM: case NR_TIMER:
 		break;
 	default:
 		// panic("uart do not support offset = %d", offset);
