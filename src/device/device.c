@@ -35,7 +35,7 @@ void init_alarm();
 
 void send_key(uint8_t, bool);
 void update_uart();
-void update_gpio(int, int);
+void update_gpio(int, int, bool);
 void vga_update_screen();
 
 void device_update() {
@@ -51,6 +51,7 @@ void device_update() {
 #ifndef CONFIG_TARGET_AM
 	SDL_Event event;
 	int x = -1, y = -1;
+	bool is_bottondown = false;
 
 	while (SDL_PollEvent(&event)) {
 		switch (event.type) {
@@ -67,10 +68,12 @@ void device_update() {
 				break;
 			}
 #endif
-			case SDL_MOUSEBUTTONDOWN: {
+			case SDL_MOUSEBUTTONDOWN:
+			case SDL_MOUSEBUTTONUP: {
 				x = event.button.x;
 				y = event.button.y;
-				printf("(%d, %d)\n", x, y);
+				is_bottondown = (event.button.type == SDL_MOUSEBUTTONDOWN);
+				// printf("(%d, %d)\n", x, y);
 				break;
 			}
 			default: break;
@@ -78,7 +81,7 @@ void device_update() {
 	}
 #endif
 	IFDEF(CONFIG_HAS_UART, update_uart());
-	IFDEF(CONFIG_HAS_CONFREG, update_gpio(x, y));
+	IFDEF(CONFIG_HAS_CONFREG, update_gpio(x, y, is_bottondown));
 }
 
 void sdl_clear_event_queue() {

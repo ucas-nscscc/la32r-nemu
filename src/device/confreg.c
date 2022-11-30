@@ -113,6 +113,7 @@ typedef enum {
 	NR_RG1,
 	NR_NUM,
 	NR_SWITCH,
+	NR_BTN_KEY,
 	NR_TIMER,
 	NR_REGS,
 } confreg_regs_t;
@@ -123,6 +124,7 @@ static uint32_t regs[NR_REGS] = {
 	[NR_RG1] = 0x0,
 	[NR_NUM] = 0x0,
 	[NR_SWITCH] = 0xff,
+	[NR_BTN_KEY] = 0x0,
 	[NR_TIMER] = 0x0,
 };
 
@@ -131,6 +133,7 @@ static uint32_t old_us;
 static uint32_t nr_us = TIMER_FREQ / (1 MHz);
 static SDL_Renderer *renderer = NULL;
 static uint8_t switch_status = 0xff;
+static uint16_t btn_key_status = 0x0;
 
 static void init_gpio() {
 	SDL_Window *window = NULL;
@@ -160,21 +163,21 @@ static void update_led()
 	}
 }
 
-static void mov_vertical(SDL_Rect *rects, int dx, int num)
+static void mov_vertical(SDL_Rect *rects, int dy, int num)
+{
+	int i;
+	for (i = 0; i < num; i++) {
+		rects[i].y += dy;
+	}
+}
+
+static void mov_horizental(SDL_Rect *rects, int dx, int num)
 {
 	int i;
 	for (i = 0; i < num; i++) {
 		rects[i].x += dx;
 	}
 }
-
-// static void mov_horizental(SDL_Rect *rects, int dy, int num)
-// {
-// 	int i;
-// 	for (i = 0; i < num; i++) {
-// 		rects[i].y += dy;
-// 	}
-// }
 
 static void draw_num(uint8_t num, int nr)
 {
@@ -189,7 +192,7 @@ static void draw_num(uint8_t num, int nr)
 	};
 	int i, r = 0;
 
-	mov_vertical(rects, 40 * nr, 7);
+	mov_horizental(rects, 40 * nr, 7);
 	for (i = 0; i < 7; i++) {
 		r = num & 0x1 ? 255: 0;
 		SDL_SetRenderDrawColor(renderer, r, 0, 0, 255);
@@ -220,21 +223,21 @@ static int in_switch(int x, int y)
 		if (in_rect(x, y, &rect)) {
 			return i;
 		}
-		mov_vertical(&rect, 30, 1);
+		mov_horizental(&rect, 30, 1);
 	}
 	return -1;
 }
 
-static void update_switch(int x, int y)
+static void update_switch(int x, int y, bool is_buttondown)
 {
 	int i, switch_num = -1, r = 0;
 	SDL_Rect rect = { 0, 125, 20, 40 };
 	uint8_t switch_reg;
 
 	switch_num = in_switch(x, y);
-	if (switch_num != -1) {
+	if (switch_num != -1 && is_buttondown) {
 		switch_status ^= 0x1 << switch_num;
-		// printf("switch status: %x\n", switch_status);
+		// printf("switch status: %x, switch num: %d\n", switch_status, switch_num);
 	}
 
 	regs[NR_SWITCH] = switch_status;
@@ -246,6 +249,55 @@ static void update_switch(int x, int y)
 		SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
 		SDL_RenderDrawRect(renderer, &rect);
 		switch_reg <<= 1;
+		mov_horizental(&rect, 30, 1);
+	}
+}
+
+static int in_btn_key(int x, int y)
+{
+	SDL_Rect rect = { 0, 175, 20, 20 };
+	int i, j;
+
+	for (i = 0; i < 4; i++) {
+		for (j = 0; j < 4; j++) {
+			if (in_rect(x, y, &rect)) {
+				return i * 4 + j;
+			}
+			mov_horizental(&rect, 30, 1);
+		}
+		mov_horizental(&rect, -120, 1);
+		mov_vertical(&rect, 30, 1);
+	}
+	return -1;
+}
+
+static void update_btn_key(int x, int y, bool is_buttondown)
+{
+	int i, j, btn_key_num = -1, r = 0;
+	// int btn_key_num = -1;
+	SDL_Rect rect = { 0, 175, 20, 20 };
+	uint16_t btn_key_reg;
+
+	btn_key_num = in_btn_key(x, y);
+	if (btn_key_num != -1) {
+		btn_key_status ^= 0x1 << btn_key_num;
+		// printf("btn key num : %d, status: %x\n", btn_key_num, btn_key_status);
+	}
+
+	regs[NR_BTN_KEY] = btn_key_status;
+	btn_key_reg = regs[NR_BTN_KEY];
+
+	for (i = 0; i < 4; i++) {
+		for (j = 0; j < 4; j++) {
+			r = btn_key_reg & 0x1 ? 255 : 0;
+			SDL_SetRenderDrawColor(renderer, r, 0, 0, 255);
+			SDL_RenderFillRect(renderer, &rect);
+			SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
+			SDL_RenderDrawRect(renderer, &rect);
+			mov_horizental(&rect, 30, 1);
+			btn_key_reg >>= 1;
+		}
+		mov_horizental(&rect, -120, 1);
 		mov_vertical(&rect, 30, 1);
 	}
 }
@@ -258,14 +310,14 @@ static void update_timer()
 	regs[NR_TIMER] += us_interval * nr_us;
 }
 
-void update_gpio(int x, int y)
+void update_gpio(int x, int y, int is_buttondown)
 {
 	update_led();
 	update_rg(0);
 	update_rg(1);
 	update_num();
-
-	update_switch(x, y);
+	update_switch(x, y, is_buttondown);
+	update_btn_key(x, y, is_buttondown);
 
 	SDL_RenderPresent(renderer);
 
@@ -286,6 +338,8 @@ static confreg_regs_t get_reg_idx(uint32_t offset, bool is_write)
 		return NR_NUM;
 	case 0xf060:
 		return NR_SWITCH;
+	case 0xf070:
+		return NR_BTN_KEY;
 	case 0xe000:
 		return NR_TIMER;
 	default:
@@ -297,7 +351,7 @@ static void confreg_io_handler(uint32_t offset, int len, bool is_write)
 {
 	assert(len == 4);
 	confreg_regs_t reg_idx = get_reg_idx(offset, is_write);
-	// assert (reg_idx < NR_REGS);
+	assert (reg_idx < NR_REGS);
 	if (is_write) {
 		regs[reg_idx] = confreg_base[offset / 4];
 	} else {
@@ -305,10 +359,10 @@ static void confreg_io_handler(uint32_t offset, int len, bool is_write)
 	}
 	switch (reg_idx)
 	{
-	case NR_LED: case NR_RG0: case NR_RG1: case NR_NUM: case NR_SWITCH: case NR_TIMER:
+	case NR_LED: case NR_RG0: case NR_RG1: case NR_NUM: case NR_SWITCH: case NR_BTN_KEY: case NR_TIMER:
 		break;
 	default:
-		// panic("uart do not support offset = %d", offset);
+		panic("uart do not support offset = %d", offset);
 		break;
 	}
 }
