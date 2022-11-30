@@ -94,12 +94,25 @@ do {								\
 	}				\
 	ret;				\
 })
+#define in_bound(x, min, max)	(((min) <= (x)) && ((x) <= (max)))
+#define in_rect(x, y, rect)						\
+({									\
+	int _x = x;							\
+	int _y = y;							\
+	SDL_Rect *_rect = rect;						\
+	int _x_min = _rect->x;						\
+	int _x_max = _x_min + _rect->w;					\
+	int _y_min = _rect->y;						\
+	int _y_max = _y_min + _rect->h;					\
+	in_bound(_x, _x_min, _x_max) && in_bound(_y, _y_min, _y_max);	\
+})
 
 typedef enum {
 	NR_LED,
 	NR_RG0,
 	NR_RG1,
 	NR_NUM,
+	NR_SWITCH,
 	NR_TIMER,
 	NR_REGS,
 } confreg_regs_t;
@@ -109,6 +122,7 @@ static uint32_t regs[NR_REGS] = {
 	[NR_RG0] = 0x0,
 	[NR_RG1] = 0x0,
 	[NR_NUM] = 0x0,
+	[NR_SWITCH] = 0xff,
 	[NR_TIMER] = 0x0,
 };
 
@@ -116,6 +130,7 @@ static uint32_t *confreg_base;
 static uint32_t old_us;
 static uint32_t nr_us = TIMER_FREQ / (1 MHz);
 static SDL_Renderer *renderer = NULL;
+static uint8_t switch_status = 0xff;
 
 static void init_gpio() {
 	SDL_Window *window = NULL;
@@ -153,6 +168,14 @@ static void mov_vertical(SDL_Rect *rects, int dx, int num)
 	}
 }
 
+// static void mov_horizental(SDL_Rect *rects, int dy, int num)
+// {
+// 	int i;
+// 	for (i = 0; i < num; i++) {
+// 		rects[i].y += dy;
+// 	}
+// }
+
 static void draw_num(uint8_t num, int nr)
 {
 	SDL_Rect rects[7] = {
@@ -171,8 +194,6 @@ static void draw_num(uint8_t num, int nr)
 		r = num & 0x1 ? 255: 0;
 		SDL_SetRenderDrawColor(renderer, r, 0, 0, 255);
 		SDL_RenderFillRect(renderer, &rects[i]);
-		// SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
-		// SDL_RenderDrawRect(renderer, &rects[i]);
 		num >>= 1;
 	}
 }
@@ -190,6 +211,45 @@ static void update_num()
 	}
 }
 
+static int in_switch(int x, int y)
+{
+	SDL_Rect rect = { 0, 125, 20, 40 };
+	int i;
+
+	for (i = 7; i >= 0; i--) {
+		if (in_rect(x, y, &rect)) {
+			return i;
+		}
+		mov_vertical(&rect, 30, 1);
+	}
+	return -1;
+}
+
+static void update_switch(int x, int y)
+{
+	int i, switch_num = -1, r = 0;
+	SDL_Rect rect = { 0, 125, 20, 40 };
+	uint8_t switch_reg;
+
+	switch_num = in_switch(x, y);
+	if (switch_num != -1) {
+		switch_status ^= 0x1 << switch_num;
+		// printf("switch status: %x\n", switch_status);
+	}
+
+	regs[NR_SWITCH] = switch_status;
+	switch_reg = regs[NR_SWITCH];
+	for (i = 0; i < 8; i++) {
+		r = switch_reg & 0x80 ? 0 : 255;
+		SDL_SetRenderDrawColor(renderer, r, 0, 0, 255);
+		SDL_RenderFillRect(renderer, &rect);
+		SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
+		SDL_RenderDrawRect(renderer, &rect);
+		switch_reg <<= 1;
+		mov_vertical(&rect, 30, 1);
+	}
+}
+
 static void update_timer()
 {
 	uint32_t new_us = get_time();
@@ -198,12 +258,14 @@ static void update_timer()
 	regs[NR_TIMER] += us_interval * nr_us;
 }
 
-void update_gpio()
+void update_gpio(int x, int y)
 {
 	update_led();
 	update_rg(0);
 	update_rg(1);
 	update_num();
+
+	update_switch(x, y);
 
 	SDL_RenderPresent(renderer);
 
@@ -222,6 +284,8 @@ static confreg_regs_t get_reg_idx(uint32_t offset, bool is_write)
 		return NR_RG1;
 	case 0xf050:
 		return NR_NUM;
+	case 0xf060:
+		return NR_SWITCH;
 	case 0xe000:
 		return NR_TIMER;
 	default:
@@ -241,7 +305,7 @@ static void confreg_io_handler(uint32_t offset, int len, bool is_write)
 	}
 	switch (reg_idx)
 	{
-	case NR_LED: case NR_RG0: case NR_RG1: case NR_NUM: case NR_TIMER:
+	case NR_LED: case NR_RG0: case NR_RG1: case NR_NUM: case NR_SWITCH: case NR_TIMER:
 		break;
 	default:
 		// panic("uart do not support offset = %d", offset);

@@ -35,7 +35,7 @@ void init_alarm();
 
 void send_key(uint8_t, bool);
 void update_uart();
-void update_gpio();
+void update_gpio(int, int);
 void vga_update_screen();
 
 void device_update() {
@@ -50,6 +50,8 @@ void device_update() {
 
 #ifndef CONFIG_TARGET_AM
 	SDL_Event event;
+	int x = -1, y = -1;
+
 	while (SDL_PollEvent(&event)) {
 		switch (event.type) {
 			case SDL_QUIT:
@@ -65,12 +67,18 @@ void device_update() {
 				break;
 			}
 #endif
+			case SDL_MOUSEBUTTONDOWN: {
+				x = event.button.x;
+				y = event.button.y;
+				printf("(%d, %d)\n", x, y);
+				break;
+			}
 			default: break;
 		}
 	}
 #endif
 	IFDEF(CONFIG_HAS_UART, update_uart());
-	IFDEF(CONFIG_HAS_CONFREG, update_gpio());
+	IFDEF(CONFIG_HAS_CONFREG, update_gpio(x, y));
 }
 
 void sdl_clear_event_queue() {
