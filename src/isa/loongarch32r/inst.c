@@ -199,7 +199,7 @@ static int decode_exec(Decode *s) {
 #endif
 
 	GR(0) = 0; // reset $zero to 0
-	CSR(CSR_ESTAT) |= (cpu.intr & 0x1fff);
+	CSR(CSR_ESTAT) = (cpu.intr & 0x1fff);
 
 	return 0;
 }
