@@ -43,7 +43,9 @@ static void restart() {
 	/* The zero register is always 0. */
 	cpu.gpr[0] = 0;
 
+	cpu.stable_counter = 0;
 	cpu.intr = 0;
+	cpu.ex_taken = 0;
 }
 
 void init_isa() {

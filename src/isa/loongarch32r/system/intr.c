@@ -16,24 +16,19 @@
 
 #include <isa.h>
 #include "../local-include/reg.h"
+#include "isa-def.h"
 
+// NOTE: for loongarch, *_intr is exactly *_exception
 word_t isa_raise_intr(word_t NO, vaddr_t epc) {
 	csr(CSR_PRMD) = (csr(CSR_CRMD) & 0x7) | (csr(CSR_PRMD) & ~(0x7));
 	csr(CSR_CRMD) &= ~(0x7);
+	csr(CSR_ESTAT) = ((cpu.ecode & 0x3f) << 16) | (csr(CSR_ESTAT) & ~(0x3f << 16));
+	csr(CSR_ESTAT) = ((cpu.esubcode & 0x1ff) << 22) | (csr(CSR_ESTAT) & ~(0x1ff << 22));
 	csr(CSR_ERA) = epc;
+	cpu.ex_taken = 0;
 	return csr(CSR_EENTRY);
 }
 
 word_t isa_query_intr() {
-	word_t ESTAT_IS = csr(CSR_ESTAT) & 0x1fff;
-	word_t CRMD_IE = csr(CSR_CRMD) & 0x4;
-	word_t i = INTR_EMPTY;
-	if (ESTAT_IS != 0 && CRMD_IE != 0) {
-		i = 0;
-		while ((ESTAT_IS & 0x1) == 0) {
-			i++;
-			ESTAT_IS >>=0x1;
-		}
-	}
-	return i;
+	return cpu.ex_taken ? 1 : -1;
 }

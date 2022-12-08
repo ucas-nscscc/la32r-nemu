@@ -17,7 +17,11 @@
 #ifndef __ISA_LOONGARCH32R_H__
 #define __ISA_LOONGARCH32R_H__
 
+#include <SDL2/SDL_stdinc.h>
 #include <common.h>
+#include <stdint.h>
+
+#define SC_FREQ (CONFIG_CPU_TIMER_FREQ MHz)
 
 enum {
 	CSR_CRMD,
@@ -52,11 +56,35 @@ enum {
 	CSR_DMW1,
 };
 
+#define ECODE_INT	0x0
+#define ECODE_PIL	0x1
+#define ECODE_PIS	0x2
+#define ECODE_PIF	0x3
+#define ECODE_PME	0x4
+#define ECODE_PPI	0x7
+#define ECODE_ADEF	0x8
+#define ECODE_ADEM	0x8
+#define ECODE_ALE	0x9
+#define ECODE_SYS	0xb
+#define ECODE_BRK	0xc
+#define ECODE_INE	0xd
+#define ECODE_IPE	0xe
+#define ECODE_FPD	0xf
+#define ECODE_FPE	0x12
+#define ECODE_TLBR	0x3f
+
+#define ESUBCODE_ADEF	0x0
+#define ESUBCODE_ADEM	0x1
+
 typedef struct {
 	word_t gpr[32];
 	vaddr_t pc;
 	word_t csr[0x182];
+	uint64_t stable_counter;
 	word_t intr;
+	bool ex_taken;
+	uint ecode;
+	uint esubcode;
 } loongarch32r_CPU_state;
 
 // decode

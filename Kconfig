@@ -15,6 +15,12 @@ config ISA_loongarch32r
   bool "loongarch32r"
 endchoice
 
+if ISA_loongarch32r
+config CPU_TIMER_FREQ
+int "CPU inner timer frequency (MHz)"
+default 50
+endif
+
 config ISA
   string
   default "x86" if ISA_x86

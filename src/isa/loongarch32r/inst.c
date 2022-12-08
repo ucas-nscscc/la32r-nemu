@@ -14,10 +14,14 @@
 * See the Mulan PSL v2 for more details.
 ***************************************************************************************/
 
+#include "isa-def.h"
 #include "local-include/reg.h"
+#include "utils.h"
 #include <cpu/cpu.h>
 #include <cpu/ifetch.h>
 #include <cpu/decode.h>
+#include <stdint.h>
+#include <stdio.h>
 
 #define GR(name) gpr(name)
 #define CSR(name) csr(name)
@@ -26,6 +30,7 @@
 
 enum {
 	TYPE_3RI0,
+	TYPE_2RI0,
 	TYPE_2RUI5,
 	TYPE_2RSI12,
 	TYPE_2RUI12,
@@ -78,10 +83,13 @@ enum {
 		_##csr_type();			\
 		break;
 
+#define NR_US (SC_FREQ / (1 MHz))
+
 static void decode_operand(Decode *s, int type, int *rj, int *rk, int *rd, int *csr, word_t *imm) {
 	uint32_t i = s->isa.inst.val;
 	switch (type) {
 		prepare_ops(3R,I0);
+		prepare_ops(2R, I0);
 		prepare_ops(2R,UI5);
 		prepare_ops(2R,SI12);
 		prepare_ops(2R,UI12);
@@ -137,6 +145,10 @@ static int decode_exec(Decode *s) {
 	INSTPAT("0001010 ???????????????????? ?????",	lu12i.w,	1RSI20,		GR(rd) = imm);
 	INSTPAT("0001110 ???????????????????? ?????",	pcaddu12i.w,	1RSI20,		GR(rd) = s->pc + imm);
 	
+	/* type 2RI0 */
+	INSTPAT("0000000000000000011000 ????? ?????",	rdcntvl.w,	2RI0,		GR(rd) = cpu.stable_counter & 0xffffffff);
+	INSTPAT("0000000000000000011001 ????? ?????",	rdcntvh.w,	2RI0,		GR(rd) = (cpu.stable_counter >> 32) & 0xffffffff);
+
 	/* type 2RUI5 */
 	INSTPAT("00000000010000 001 ????? ????? ?????",	slli.w,		2RUI5,		GR(rd) = GR(rj) << (imm & 0x1f));
 	INSTPAT("00000000010001 001 ????? ????? ?????",	srli.w,		2RUI5,		GR(rd) = ((unsigned)GR(rj)) >> (imm & 0x1f));
@@ -198,8 +210,17 @@ static int decode_exec(Decode *s) {
 	}
 #endif
 
-	GR(0) = 0; // reset $zero to 0
-	CSR(CSR_ESTAT) = (cpu.intr & 0x1fff);
+	/* reset gpr r0 to zero */
+	GR(0) = 0;
+	/* get outer interrupt sample */
+	CSR(CSR_ESTAT) = (cpu.intr & 0x1ffc) | (CSR(CSR_ESTAT) & ~0x1ffc);
+	if ((CSR(CSR_ESTAT) & CSR(CSR_ECFG) & 0x1fff) != 0 && (CSR(CSR_CRMD) & 0x4) != 0) {
+		cpu.ecode = 0;
+		cpu.esubcode = 0;
+		cpu.ex_taken = 1;
+	}
+	/* update stable counter */
+	cpu.stable_counter = get_time() * NR_US;
 
 	return 0;
 }
