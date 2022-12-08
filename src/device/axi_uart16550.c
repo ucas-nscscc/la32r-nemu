@@ -113,10 +113,10 @@ void update_uart()
 		int c = getch();
 		send_uart(c);
 	}
-	if (!(regs[NR_LSR] & COM_LSR_TXRDY)) {
-		uart_putc(regs[NR_THR] & 0xff);
-		regs[NR_LSR] = regs[NR_LSR] | COM_LSR_TXRDY;
-	}
+	// if (!(regs[NR_LSR] & COM_LSR_TXRDY)) {
+	// 	uart_putc(regs[NR_THR] & 0xff);
+	// 	regs[NR_LSR] = regs[NR_LSR] | COM_LSR_TXRDY;
+	// }
 }
 
 static uart_regs_t get_reg_idx(uint32_t offset, bool is_write)
@@ -163,6 +163,8 @@ static void uart_io_handler(uint32_t offset, int len, bool is_write)
 		break;
 	case NR_THR:
 		regs[NR_LSR] = regs[NR_LSR] & ~(COM_LSR_TXRDY);
+		uart_putc(regs[NR_THR] & 0xff);
+		regs[NR_LSR] = regs[NR_LSR] | COM_LSR_TXRDY;
 		break;
 	case NR_IER:
 	case NR_FCR:
