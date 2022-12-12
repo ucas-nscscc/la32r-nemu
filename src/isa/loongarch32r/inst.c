@@ -106,6 +106,8 @@ static int decode_exec(Decode *s) {
 	int rk = 0;
 	int rd = 0;
 	int csr = 0;
+	word_t ex_mask = 0;
+	word_t ex_submask = 0;
 	word_t imm = 0;
 	char instr[32];
 	s->dnpc = s->snpc;
@@ -215,10 +217,21 @@ static int decode_exec(Decode *s) {
 	/* get outer interrupt sample */
 	CSR(CSR_ESTAT) = (cpu.intr & 0x1ffc) | (CSR(CSR_ESTAT) & ~0x1ffc);
 	if ((CSR(CSR_ESTAT) & CSR(CSR_ECFG) & 0x1fff) != 0 && (CSR(CSR_CRMD) & 0x4) != 0) {
-		cpu.ecode = 0;
-		cpu.esubcode = 0;
+		ex_mask |= 0x1;
+		ex_submask |= 0x1;
+	}
+	/* update cpu exception status */
+	cpu.ecode = 0;
+	cpu.esubcode = 0;
+	if (ex_mask != 0) {
+		while ((ex_mask & 0x1) == 0) {
+			cpu.ecode ++;
+			ex_mask >>= 1;
+		}
+		cpu.esubcode = (ex_submask & 0x1) ? 0x0 : 0x1;
 		cpu.ex_taken = 1;
 	}
+
 	/* update stable counter */
 	cpu.stable_counter = get_time() * NR_US;
 
