@@ -15,6 +15,7 @@
 ***************************************************************************************/
 
 #include "isa-def.h"
+#include "isa.h"
 #include "local-include/reg.h"
 #include "utils.h"
 #include <cpu/cpu.h>
@@ -106,10 +107,21 @@ static int decode_exec(Decode *s) {
 	int rk = 0;
 	int rd = 0;
 	int csr = 0;
-	word_t ex_mask = 0;
-	word_t ex_submask = 0;
 	word_t imm = 0;
 	char instr[32];
+
+	/* get outer interrupt sample */
+	CSR(CSR_ESTAT) = (cpu.intr & 0x1ffc) | (CSR(CSR_ESTAT) & ~0x1ffc);
+	if ((CSR(CSR_ESTAT) & CSR(CSR_ECFG) & 0x1fff) != 0 && (CSR(CSR_CRMD) & 0x4) != 0) {
+		cpu.emask |= 0x1;
+		cpu.esubmask |= 0x1;
+		cpu.ex_taken = 1;
+	}
+
+	if (cpu.ex_taken) {
+		goto finish_exec_instr;
+	}
+
 	s->dnpc = s->snpc;
 
 #define INSTPAT_INST(s) ((s)->isa.inst.val)
@@ -183,7 +195,6 @@ static int decode_exec(Decode *s) {
 	INSTPAT("011010 ???????????????? ????? ?????",	bltu,		2RI16,		s->dnpc = ((unsigned)GR(rj)) < ((unsigned)GR(rd)) ? s->pc + imm : s->snpc);
 	INSTPAT("011011 ???????????????? ????? ?????",	bgeu,		2RI16,		s->dnpc = ((unsigned)GR(rj)) >= ((unsigned)GR(rd)) ? s->pc + imm : s->snpc);
 
-
 	/* type I26 */
 	INSTPAT("010100 ???????????????? ??????????",	b,		0RI26,		s->dnpc = s->pc + imm);
 	INSTPAT("010101 ???????????????? ??????????",	bl,		0RI26,		GR(1) = s->pc + 4; s->dnpc = s->pc + imm);
@@ -212,24 +223,13 @@ static int decode_exec(Decode *s) {
 	}
 #endif
 
+finish_exec_instr:
 	/* reset gpr r0 to zero */
 	GR(0) = 0;
-	/* get outer interrupt sample */
-	CSR(CSR_ESTAT) = (cpu.intr & 0x1ffc) | (CSR(CSR_ESTAT) & ~0x1ffc);
-	if ((CSR(CSR_ESTAT) & CSR(CSR_ECFG) & 0x1fff) != 0 && (CSR(CSR_CRMD) & 0x4) != 0) {
-		ex_mask |= 0x1;
-		ex_submask |= 0x1;
-	}
+	
 	/* update cpu exception status */
-	cpu.ecode = 0;
-	cpu.esubcode = 0;
-	if (ex_mask != 0) {
-		while ((ex_mask & 0x1) == 0) {
-			cpu.ecode ++;
-			ex_mask >>= 1;
-		}
-		cpu.esubcode = (ex_submask & 0x1) ? 0x0 : 0x1;
-		cpu.ex_taken = 1;
+	if (cpu.ex_taken) {
+		s->dnpc = isa_raise_intr(0, cpu.pc);
 	}
 
 	/* update stable counter */
@@ -239,6 +239,15 @@ static int decode_exec(Decode *s) {
 }
 
 int isa_exec_once(Decode *s) {
-	s->isa.inst.val = inst_fetch(&s->snpc, 4);
+	cpu.emask = 0;
+	cpu.esubmask = 0;
+	cpu.ex_taken = 0;
+	if (s->snpc % 4 != 0) {
+		cpu.emask |= (0x1 << ECODE_ADEF);
+		cpu.esubmask |= 0x1;
+		cpu.ex_taken = 1;
+	} else {
+		s->isa.inst.val = inst_fetch(&s->snpc, 4);
+	}
 	return decode_exec(s);
 }

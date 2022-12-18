@@ -87,10 +87,6 @@ static void exec_once(Decode *s, vaddr_t pc) {
 static void execute(uint64_t n) {
 	Decode s;
 	for (;n > 0; n --) {
-		word_t intr = isa_query_intr();
-		if (intr != INTR_EMPTY) {
-			cpu.pc = isa_raise_intr(intr, cpu.pc);
-		}
 		exec_once(&s, cpu.pc);
 		g_nr_guest_inst ++;
 		trace_and_difftest(&s, cpu.pc);

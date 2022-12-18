@@ -83,8 +83,8 @@ typedef struct {
 	uint64_t stable_counter;
 	word_t intr;
 	bool ex_taken;
-	uint ecode;
-	uint esubcode;
+	uint emask;
+	uint esubmask;
 } loongarch32r_CPU_state;
 
 // decode
